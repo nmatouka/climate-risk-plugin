@@ -1,6 +1,6 @@
 # Climate Risk for Zillow - California
 
-A free, open-source browser extension that displays climate risk information for California properties on Zillow, helping homebuyers make informed decisions about climate hazards.
+A free, open-source browser extension that displays educational climate risk information for California properties on Zillow, helping homebuyers make informed decisions about climate hazards. This is a proof of concept and should not be relied upon to make purchasing decisions.
 
 ![Extension Demo](docs/demo-screenshot.png)
 
@@ -39,7 +39,7 @@ A free, open-source browser extension that displays climate risk information for
 
 4. Click "Load unpacked"
 
-5. Select the `zillow-climate-risk` directory
+5. Select the `climate-risk-plugin` directory
 
 6. The extension icon should appear in your toolbar!
 
@@ -96,17 +96,15 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 ### Priority Improvements
 
 1. **Firefox support** - Port to Firefox Add-ons
-2. **Additional states** - Expand beyond California
-3. **Improved flood data** - Find alternative APIs without CORS restrictions
-4. **Sea level rise data** - Integrate quantitative projections
-5. **UI enhancements** - Add charts, historical trends, comparisons
+2. **Improved flood data** - Find alternative APIs without CORS restrictions
+3. **Sea level rise data** - Integrate quantitative projections
 
 ## Development
 
 ### Project Structure
 
 ```
-zillow-climate-risk/
+climate-risk-plugin/
 ├── manifest.json           # Extension configuration
 ├── icons/                  # Extension icons
 ├── content/
@@ -171,26 +169,6 @@ MIT License - See [LICENSE](LICENSE) for details
 - **Bug Reports:** [Open an issue](https://github.com/yourusername/zillow-climate-risk/issues)
 - **Feature Requests:** [Open an issue](https://github.com/yourusername/zillow-climate-risk/issues)
 - **Questions:** [Discussions](https://github.com/yourusername/zillow-climate-risk/discussions)
-
-## Roadmap
-
-### v1.0 (Current)
-- ✅ California properties only
-- ✅ Wildfire risk from CAL FIRE
-- ✅ Extreme heat from Cal-Adapt
-- ✅ Links to FEMA and NOAA
-
-### v1.1 (Planned)
-- [ ] Firefox support
-- [ ] Improved error handling
-- [ ] Property comparison tool
-- [ ] Export risk reports
-
-### v2.0 (Future)
-- [ ] Additional states (Florida, Texas, etc.)
-- [ ] Historical trend analysis
-- [ ] Insurance cost estimates
-- [ ] Mobile app version
 
 ---
 
