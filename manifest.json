@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Climate Risk for Zillow - California",
+  "version": "1.0.0",
+  "description": "View climate risk data (wildfire, flood, sea level rise, heat) for California properties on Zillow",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.zillow.com/*",
+    "https://api.cal-adapt.org/*",
+    "https://nominatim.openstreetmap.org/*",
+    "https://services.gis.ca.gov/*",
+    "https://hazards.fema.gov/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.zillow.com/*"],
+      "js": ["utils/cache.js", "utils/dataFetcher.js", "content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

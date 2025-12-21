@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+dist/
+build/
+*.zip
+
+# Temporary files
+*.tmp
+*.log
+
+# Node modules (if added later)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment files
+.env
+.env.local
+
+# Chrome extension packaging
+*.pem
+*.crx
+
+# Documentation builds
+docs/_build/
+
+# Testing
+coverage/
+.nyc_output/
