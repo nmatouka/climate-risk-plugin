@@ -9,6 +9,7 @@
   let currentPropertyData = null;
   let isProcessing = false;
   let hasShownSearchPageMessage = false;
+  let floodDataLoadStartTime = null;
 
   function init() {
     console.log('🌡️ Climate Risk Extension: Initialized');
@@ -38,7 +39,6 @@
       currentPropertyData = propertyData;
       processProperty(propertyData);
     }
-    // Remove the repeated logging - property is already being tracked
   }
 
   function isSearchResultsPage() {
@@ -303,6 +303,12 @@
           }
         }
         
+        // Show initial badge with loading state for flood data
+        displayRiskBadgeWithFloodLoading(propertyData);
+        
+        // Track flood data load time
+        floodDataLoadStartTime = Date.now();
+        
         console.log('🌡️ Calling ClimateDataFetcher.fetchAllRisks...');
         riskData = await ClimateDataFetcher.fetchAllRisks(propertyData);
         console.log('🌡️ Step 5: Climate data received:', riskData);
@@ -324,103 +330,66 @@
     }
   }
 
-  function displayRiskBadge(riskData) {
+  function displayRiskBadgeWithFloodLoading(propertyData) {
     const existingBadge = document.getElementById('climate-risk-badge');
     if (existingBadge) existingBadge.remove();
     
-    // Try multiple strategies to find insertion point
-    let insertionPoint = null;
-    let insertMethod = null;
-    
-    // Strategy 1: Find price element
-    const priceSelectors = [
-      '[data-test="price"]',
-      '[data-testid="price"]',
-      '.ds-home-details-chip',
-      '[class*="Text-c11n"][class*="price"]',
-      'span[data-test="price"]',
-      'div[data-test="price"]'
-    ];
-    
-    for (let selector of priceSelectors) {
-      const elements = document.querySelectorAll(selector);
-      // Only use if there's exactly one (avoid search results)
-      if (elements.length === 1) {
-        insertionPoint = elements[0];
-        insertMethod = 'afterPrice';
-        console.log('🌡️ Found price element');
-        break;
-      }
-    }
-    
-    // Strategy 2: Find summary/facts section
-    if (!insertionPoint) {
-      const summarySelectors = [
-        '[data-test="home-details-summary"]',
-        '.ds-home-details-chip-container',
-        '[class*="summary"]',
-        '.ds-overview-section'
-      ];
-      
-      for (let selector of summarySelectors) {
-        insertionPoint = document.querySelector(selector);
-        if (insertionPoint) {
-          insertMethod = 'afterSummary';
-          console.log('🌡️ Found summary element');
-          break;
-        }
-      }
-    }
-    
-    // Strategy 3: Find main content area
-    if (!insertionPoint) {
-      const contentSelectors = [
-        'article',
-        'main',
-        '[role="main"]',
-        '.ds-data-col',
-        '#ds-container'
-      ];
-      
-      for (let selector of contentSelectors) {
-        insertionPoint = document.querySelector(selector);
-        if (insertionPoint) {
-          insertMethod = 'prepend';
-          console.log('🌡️ Found main content');
-          break;
-        }
-      }
-    }
-    
-    if (!insertionPoint) {
+    const insertionPoint = findInsertionPoint();
+    if (!insertionPoint.element) {
       console.error('🌡️ Cannot find suitable insertion point for badge');
       return;
     }
     
-    const badge = createBadgeElement(riskData);
+    // Create a temporary badge showing flood data is loading
+    const badge = document.createElement('div');
+    badge.id = 'climate-risk-badge';
+    badge.className = 'climate-risk-badge climate-risk-moderate';
     
-    // Insert based on method
-    if (insertMethod === 'afterPrice' || insertMethod === 'afterSummary') {
-      insertionPoint.parentNode.insertBefore(badge, insertionPoint.nextSibling);
-    } else if (insertMethod === 'prepend') {
-      insertionPoint.insertBefore(badge, insertionPoint.firstChild);
-    }
+    badge.innerHTML = `
+      <div class="climate-risk-header">
+        <span class="climate-risk-icon">🌡️</span>
+        <span class="climate-risk-title">Climate Risk: Loading...</span>
+      </div>
+      <div class="flood-loading">
+        <span>Loading flood zone data (this may take 10-20 seconds on first visit)...</span>
+      </div>
+    `;
     
-    console.log('🌡️ ✅ Badge inserted successfully!');
+    insertElement(badge, insertionPoint);
   }
 
-  function createBadgeElement(riskData) {
+  function displayRiskBadge(riskData) {
+    const existingBadge = document.getElementById('climate-risk-badge');
+    if (existingBadge) existingBadge.remove();
+    
+    const insertionPoint = findInsertionPoint();
+    if (!insertionPoint.element) {
+      console.error('🌡️ Cannot find suitable insertion point for badge');
+      return;
+    }
+    
     const overallRisk = calculateOverallRisk(riskData);
     
     const badge = document.createElement('div');
     badge.id = 'climate-risk-badge';
     badge.className = `climate-risk-badge climate-risk-${overallRisk.level}`;
     
+    // Show flood load time if it was just loaded
+    let floodLoadTimeMsg = '';
+    if (floodDataLoadStartTime) {
+      const loadTime = ((Date.now() - floodDataLoadStartTime) / 1000).toFixed(1);
+      if (loadTime < 30) { // Only show if reasonable
+        floodLoadTimeMsg = `<div style="font-size: 11px; color: #666; margin-top: 4px;">Flood data loaded in ${loadTime}s</div>`;
+      }
+      floodDataLoadStartTime = null;
+    }
+    
     badge.innerHTML = `
       <div class="climate-risk-header">
         <span class="climate-risk-icon">🌡️</span>
         <span class="climate-risk-title">Climate Risk: ${overallRisk.label}</span>
       </div>
+      ${floodLoadTimeMsg}
       <button class="climate-risk-toggle">View Details</button>
     `;
     
@@ -435,7 +404,85 @@
         : 'View Details';
     });
     
-    return badge;
+    insertElement(badge, insertionPoint);
+    console.log('🌡️ ✅ Badge inserted successfully!');
+  }
+
+  function findInsertionPoint() {
+    // Try multiple strategies to find insertion point
+    let element = null;
+    let method = null;
+    
+    // Strategy 1: Find price element
+    const priceSelectors = [
+      '[data-test="price"]',
+      '[data-testid="price"]',
+      '.ds-home-details-chip',
+      '[class*="Text-c11n"][class*="price"]',
+      'span[data-test="price"]',
+      'div[data-test="price"]'
+    ];
+    
+    for (let selector of priceSelectors) {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length === 1) {
+        element = elements[0];
+        method = 'afterPrice';
+        console.log('🌡️ Found price element');
+        break;
+      }
+    }
+    
+    // Strategy 2: Find summary/facts section
+    if (!element) {
+      const summarySelectors = [
+        '[data-test="home-details-summary"]',
+        '.ds-home-details-chip-container',
+        '[class*="summary"]',
+        '.ds-overview-section'
+      ];
+      
+      for (let selector of summarySelectors) {
+        element = document.querySelector(selector);
+        if (element) {
+          method = 'afterSummary';
+          console.log('🌡️ Found summary element');
+          break;
+        }
+      }
+    }
+    
+    // Strategy 3: Find main content area
+    if (!element) {
+      const contentSelectors = [
+        'article',
+        'main',
+        '[role="main"]',
+        '.ds-data-col',
+        '#ds-container'
+      ];
+      
+      for (let selector of contentSelectors) {
+        element = document.querySelector(selector);
+        if (element) {
+          method = 'prepend';
+          console.log('🌡️ Found main content');
+          break;
+        }
+      }
+    }
+    
+    return { element, method };
+  }
+
+  function insertElement(badge, insertionPoint) {
+    const { element, method } = insertionPoint;
+    
+    if (method === 'afterPrice' || method === 'afterSummary') {
+      element.parentNode.insertBefore(badge, element.nextSibling);
+    } else if (method === 'prepend') {
+      element.insertBefore(badge, element.firstChild);
+    }
   }
 
   function calculateOverallRisk(riskData) {

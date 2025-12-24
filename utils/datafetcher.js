@@ -2,7 +2,14 @@ const ClimateDataFetcher = {
   CAL_ADAPT_BASE_URL: 'https://api.cal-adapt.org/api',
   CALFIRE_FHSZ_URL: 'https://services.gis.ca.gov/arcgis/rest/services/Environment/Fire_Severity_Zones/MapServer/0/query',
   FEMA_NFHL_URL: 'https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28/query',
+  // FIXED: Use GitHub Pages URL instead of raw.githubusercontent.com (better CORS support)
+  FLOOD_ZONES_URL: 'https://nmatouka.github.io/climate-risk-plugin/flood-zone-data/flood_zones_simplified.geojson',
   PRIORITY_GCMS: ['HadGEM2-ES', 'CNRM-CM5', 'CanESM2', 'MIROC5'],
+  
+  // Cache for flood zone GeoJSON (loaded once per session)
+  floodZoneData: null,
+  floodZoneDataLoading: false,
+  floodZoneLoadPromise: null,
   
   async fetchAllRisks(propertyData) {
     const results = {
@@ -15,7 +22,7 @@ const ClimateDataFetcher = {
     try {
       const [wildfire, flood, seaLevelRise, heat] = await Promise.allSettled([
         this.fetchWildfireRisk(propertyData),
-        this.fetchFloodRisk(propertyData),
+        this.fetchFloodRiskLocal(propertyData),
         this.fetchSeaLevelRiseRisk(propertyData),
         this.fetchHeatRisk(propertyData)
       ]);
@@ -30,6 +37,214 @@ const ClimateDataFetcher = {
     }
     
     return results;
+  },
+  
+  // Load flood zone GeoJSON data (once per session)
+  async loadFloodZoneData() {
+    // Return cached data if available
+    if (this.floodZoneData) {
+      console.log('🌊 Returning cached flood data');
+      return this.floodZoneData;
+    }
+    
+    // If already loading, wait for that promise
+    if (this.floodZoneDataLoading) {
+      return this.floodZoneLoadPromise;
+    }
+    
+    // Start loading
+    this.floodZoneDataLoading = true;
+    this.floodZoneLoadPromise = (async () => {
+      try {
+        console.log('🌊 Loading flood zone data from GitHub Pages...');
+        const startTime = performance.now();
+        
+        const response = await fetch(this.FLOOD_ZONES_URL, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          },
+          mode: 'cors'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to load flood data: ${response.status} ${response.statusText}`);
+        }
+        
+        const geojson = await response.json();
+        const loadTime = ((performance.now() - startTime) / 1000).toFixed(1);
+        console.log(`🌊 Flood data loaded in ${loadTime}s (${geojson.features.length} features)`);
+        
+        this.floodZoneData = geojson;
+        return geojson;
+        
+      } catch (error) {
+        console.error('🌊 Error loading flood zone data:', error);
+        throw error;
+      } finally {
+        this.floodZoneDataLoading = false;
+      }
+    })();
+    
+    return this.floodZoneLoadPromise;
+  },
+  
+  // Point-in-polygon check
+  pointInPolygon(point, polygon) {
+    const [x, y] = point;
+    let inside = false;
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i];
+      const [xj, yj] = polygon[j];
+      
+      const intersect = ((yi > y) !== (yj > y)) &&
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      
+      if (intersect) inside = !inside;
+    }
+    
+    return inside;
+  },
+  
+  // Check if point is in geometry
+  pointInGeometry(point, geometry) {
+    // Skip null or invalid geometries
+    if (!geometry || !geometry.type || !geometry.coordinates) {
+      return false;
+    }
+    
+    const { type, coordinates } = geometry;
+    
+    if (type === 'Polygon') {
+      return this.pointInPolygon(point, coordinates[0]);
+    } else if (type === 'MultiPolygon') {
+      for (const polygon of coordinates) {
+        const exteriorRing = polygon[0];
+        if (this.pointInPolygon(point, exteriorRing)) {
+          // Check if point is in any holes
+          if (polygon.length > 1) {
+            for (let i = 1; i < polygon.length; i++) {
+              if (this.pointInPolygon(point, polygon[i])) {
+                return false; // Point is in a hole
+              }
+            }
+          }
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  },
+  
+  // Fetch flood risk from local GeoJSON data
+  async fetchFloodRiskLocal(propertyData) {
+    if (!propertyData.latitude || !propertyData.longitude) {
+      console.log('🌊 No coordinates available for flood lookup');
+      return {
+        available: false,
+        level: 0,
+        description: 'Location data unavailable',
+        details: 'Coordinates not found. Cannot determine flood zone.'
+      };
+    }
+    
+    try {
+      // Load the GeoJSON data
+      const geojson = await this.loadFloodZoneData();
+      
+      const point = [propertyData.longitude, propertyData.latitude];
+      console.log('🌊 Checking flood zones for:', point);
+      
+      // Search for intersecting flood zones
+      const matchingZones = [];
+      
+      for (const feature of geojson.features) {
+        if (this.pointInGeometry(point, feature.geometry)) {
+          const zone = feature.properties.FLD_ZONE;
+          const riskLevel = feature.properties.risk_level;
+          
+          matchingZones.push({
+            zone: zone,
+            riskLevel: riskLevel,
+            properties: feature.properties
+          });
+        }
+      }
+      
+      if (matchingZones.length === 0) {
+        console.log('🌊 No flood zone found for this location');
+        return {
+          available: true,
+          level: 0,
+          description: 'Minimal',
+          details: 'Property is not in a mapped FEMA flood zone. Note: Flood risk can exist outside mapped zones.',
+          isInFloodZone: false
+        };
+      }
+      
+      // Use the highest risk zone if multiple zones overlap
+      const riskOrder = { 'very_high': 4, 'high': 3, 'moderate': 2, 'low': 1, 'minimal': 0 };
+      const highestRisk = matchingZones.reduce((max, zone) => {
+        return (riskOrder[zone.riskLevel] > riskOrder[max.riskLevel]) ? zone : max;
+      });
+      
+      console.log('🌊 Found flood zone:', highestRisk.zone, 'Risk:', highestRisk.riskLevel);
+      
+      return this.classifyFloodRiskLocal(highestRisk.zone, highestRisk.riskLevel);
+      
+    } catch (error) {
+      console.error('🌊 Error fetching local flood risk:', error);
+      // Don't fallback to FEMA API - it has CORS issues too
+      return {
+        available: false,
+        level: 0,
+        description: 'Error fetching data',
+        details: `Unable to load flood zone data: ${error.message}. Please check GitHub Pages is enabled.`
+      };
+    }
+  },
+  
+  // Classify flood risk from local data
+  classifyFloodRiskLocal(floodZone, riskLevel) {
+    const riskLevels = {
+      'very_high': 4,
+      'high': 3,
+      'moderate': 2,
+      'low': 1,
+      'minimal': 0
+    };
+    
+    const level = riskLevels[riskLevel] || 0;
+    
+    let description, details;
+    
+    if (floodZone.startsWith('V')) {
+      description = 'Severe';
+      details = `Property is in FEMA Flood Zone ${floodZone}, a high-risk coastal area with wave action (1% annual chance of flooding). Flood insurance is required for federally backed mortgages. Elevated construction required.`;
+    } else if (floodZone.startsWith('A')) {
+      description = 'High';
+      details = `Property is in FEMA Flood Zone ${floodZone}, a Special Flood Hazard Area with 1% annual chance of flooding. Flood insurance is required for federally backed mortgages.`;
+    } else if (floodZone === 'X' || floodZone.includes('0.2')) {
+      description = 'Moderate';
+      details = `Property is in FEMA Flood Zone ${floodZone}, a moderate-risk area (0.2% annual chance of flooding). Flood insurance is recommended but not typically required.`;
+    } else {
+      description = 'Low';
+      details = `Property is in FEMA Flood Zone ${floodZone}.`;
+    }
+    
+    return {
+      available: true,
+      level: level,
+      description: description,
+      details: details,
+      isInFloodZone: level > 0,
+      rawData: {
+        floodZone: floodZone,
+        riskLevel: riskLevel
+      }
+    };
   },
   
   async fetchWildfireRisk(propertyData) {
@@ -124,113 +339,6 @@ const ClimateDataFetcher = {
       rawData: {
         hazardClass: hazClass,
         hazardCode: hazCode
-      }
-    };
-  },
-  
-  async fetchFloodRisk(propertyData) {
-    if (!propertyData.latitude || !propertyData.longitude) {
-      console.log('🌊 No coordinates available for flood lookup');
-      return {
-        available: false,
-        level: 0,
-        description: 'Location data unavailable'
-      };
-    }
-    
-    try {
-      const params = new URLSearchParams({
-        geometry: `${propertyData.longitude},${propertyData.latitude}`,
-        geometryType: 'esriGeometryPoint',
-        inSR: '4326',
-        spatialRel: 'esriSpatialRelIntersects',
-        outFields: 'FLD_ZONE,ZONE_SUBTY,SFHA_TF,STATIC_BFE,V_DATUM',
-        returnGeometry: 'false',
-        f: 'json'
-      });
-      
-      const url = `${this.FEMA_NFHL_URL}?${params}`;
-      console.log('🌊 Fetching flood data from FEMA');
-      console.log('🌊 Request URL:', url);
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`FEMA API returned status ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('🌊 FEMA response:', data);
-      
-      if (data.error) {
-        throw new Error(`FEMA API error: ${JSON.stringify(data.error)}`);
-      }
-      
-      if (data.features && data.features.length > 0) {
-        const feature = data.features[0].attributes;
-        const floodZone = feature.FLD_ZONE;
-        const isSFHA = feature.SFHA_TF === 'T';
-        const bfe = feature.STATIC_BFE;
-        
-        console.log('🌊 Flood zone:', floodZone, 'SFHA:', isSFHA);
-        
-        return this.classifyFloodRisk(floodZone, isSFHA, bfe);
-      } else {
-        console.log('🌊 No flood zone data found for this location');
-        return {
-          available: true,
-          level: 0,
-          description: 'Minimal',
-          details: 'Property is not located in a FEMA-designated flood hazard area. Note: This does not mean zero flood risk.'
-        };
-      }
-      
-    } catch (error) {
-      console.error('🌊 Error fetching flood risk:', error);
-      return {
-        available: false,
-        level: 0,
-        description: 'Error fetching data',
-        details: `Unable to retrieve flood data: ${error.message}`
-      };
-    }
-  },
-  
-  classifyFloodRisk(floodZone, isSFHA, bfe) {
-    let level, description, details;
-    
-    if (floodZone.startsWith('V')) {
-      level = 4;
-      description = 'Severe';
-      details = `Property is in Zone ${floodZone}, a high-risk coastal flood area with wave action (1% annual chance). Flood insurance required for mortgages. Elevated construction required.`;
-    } else if (floodZone.startsWith('A') || isSFHA) {
-      level = 3;
-      description = 'High';
-      const bfeText = bfe ? ` Base flood elevation: ${bfe} feet.` : '';
-      details = `Property is in Zone ${floodZone}, a high-risk flood area (1% annual chance of flooding each year).${bfeText} Flood insurance required for mortgages.`;
-    } else if (floodZone === 'X' || floodZone.includes('0.2')) {
-      level = 2;
-      description = 'Moderate';
-      details = `Property is in Zone ${floodZone}, a moderate-risk flood area (0.2% annual chance). Flood insurance recommended but not required.`;
-    } else if (floodZone === 'D') {
-      level = 1;
-      description = 'Unknown';
-      details = 'Property is in Zone D where flood hazards are undetermined. Flood insurance availability may be limited.';
-    } else {
-      level = 0;
-      description = 'Minimal';
-      details = `Property is in Zone ${floodZone}, an area of minimal flood risk.`;
-    }
-    
-    return {
-      available: true,
-      level: level,
-      description: description,
-      details: details,
-      rawData: {
-        floodZone: floodZone,
-        isSFHA: isSFHA,
-        baseFloodElevation: bfe
       }
     };
   },

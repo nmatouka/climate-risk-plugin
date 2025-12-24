@@ -1,0 +1,26 @@
+# MacOS
+.DS_Store
+
+# Node modules (if using any build tools)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+*.zip
+dist/
+
+# Development/testing
+test/
+*.log
+
+# Chrome extension files
+*.pem
+*.crx
+
+# Note: flood-zone-data is kept in the repo but NOT loaded with the extension
+# It is hosted separately on GitHub Pages
