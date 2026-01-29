@@ -7,7 +7,8 @@
   };
 
   let currentPropertyData = null;
-  let isProcessing = false;
+  // PRIORITY 1 FIX: Changed from simple flag to promise-based locking
+  let processingPromise = null;
   let hasShownSearchPageMessage = false;
   let floodDataLoadStartTime = null;
 
@@ -18,16 +19,15 @@
   }
 
   function checkForPropertyData() {
-    if (isProcessing) return;
+    // PRIORITY 1 FIX: Don't check if already processing
+    if (processingPromise) return;
     
-    // Check if we're on a search results page
     if (isSearchResultsPage() && !hasShownSearchPageMessage) {
       console.log('🌡️ On search results page - extension works on individual property pages');
       hasShownSearchPageMessage = true;
       return;
     }
     
-    // Skip if on search results
     if (isSearchResultsPage()) {
       return;
     }
@@ -42,19 +42,16 @@
   }
 
   function isSearchResultsPage() {
-    // Check if we're on a detail page first (these should NOT be search pages)
     if (window.location.pathname.includes('/homedetails/')) {
       return false;
     }
     
-    // Check URL patterns for search pages
     if (window.location.pathname.includes('/homes/') || 
         window.location.pathname === '/ca/' ||
         window.location.search.includes('searchQueryState')) {
       return true;
     }
     
-    // Check for multiple price elements (indicates search results)
     const priceElements = document.querySelectorAll('[class*="Price"]');
     if (priceElements.length > 5) {
       return true;
@@ -64,7 +61,6 @@
   }
 
   function extractPropertyData() {
-    // Method 1: Try JSON-LD (most reliable for coordinates)
     const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
     
     for (let script of jsonLdScripts) {
@@ -75,7 +71,6 @@
             data['@type'] === 'Apartment' || 
             data['@type'] === 'House') {
           if (data.address) {
-            // Only log on first discovery
             if (!currentPropertyData || currentPropertyData.address !== `${data.address.streetAddress}, ${data.address.addressLocality}, ${data.address.addressRegion} ${data.address.postalCode}`) {
               console.log('🌡️ Found property via JSON-LD:', data.address);
               if (data.geo) {
@@ -99,31 +94,25 @@
       }
     }
     
-    // Method 2: Try to extract from URL (for detail pages)
     const urlMatch = window.location.pathname.match(/\/homedetails\/(.+?)\/(\d+)_zpid/);
     if (urlMatch) {
       const addressSlug = urlMatch[1];
       const addressParts = addressSlug.split('-');
       
-      // Find state by looking for 2-letter uppercase part that's not a number
       let state = null;
       let city = null;
       let zip = null;
       
-      // Work backwards through address parts
       for (let i = addressParts.length - 1; i >= 0; i--) {
         const part = addressParts[i];
         
-        // Check if it's a ZIP code (5 digits)
         if (/^\d{5}$/.test(part)) {
           zip = part;
           continue;
         }
         
-        // Check if it's a state code (2 uppercase letters)
         if (/^[A-Z]{2}$/i.test(part) && !state) {
           state = part.toUpperCase();
-          // City is usually the part before state
           if (i > 0) {
             city = addressParts[i - 1];
           }
@@ -131,7 +120,6 @@
         }
       }
       
-      // Only log on first discovery
       if (!currentPropertyData || currentPropertyData.address !== addressSlug.replace(/-/g, ' ')) {
         console.log('🌡️ Found property via URL:', addressSlug);
         console.log('🌡️ Parsed - State:', state, 'City:', city, 'ZIP:', zip);
@@ -147,7 +135,6 @@
       };
     }
     
-    // Method 3: Try to find address in page header
     const addressSelectors = [
       'h1[data-test="address"]',
       'h1[class*="address"]',
@@ -181,10 +168,8 @@
 
   async function geocodeAddress(propertyData) {
     try {
-      // Build a more complete address string
       let addressQuery = propertyData.address;
       
-      // If we have structured data, build a better query
       if (propertyData.streetAddress && propertyData.city && propertyData.state && propertyData.zip) {
         addressQuery = `${propertyData.streetAddress}, ${propertyData.city}, ${propertyData.state} ${propertyData.zip}`;
       }
@@ -215,7 +200,6 @@
         return coords;
       }
       
-      // If no results, try with just city, state, zip
       if (propertyData.city && propertyData.state && propertyData.zip) {
         const fallbackQuery = encodeURIComponent(`${propertyData.city}, ${propertyData.state} ${propertyData.zip}`);
         const fallbackUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${fallbackQuery}&limit=1&countrycodes=us`;
@@ -248,21 +232,35 @@
     }
   }
 
+  // PRIORITY 1 FIX: Replaced simple flag with promise-based locking
   async function processProperty(propertyData) {
-    isProcessing = true;
+    // Wait for any existing processing to complete
+    if (processingPromise) {
+      console.log('🌡️ Already processing another property, waiting...');
+      await processingPromise;
+    }
     
+    // Start new processing
+    processingPromise = processPropertyInternal(propertyData);
+    
+    try {
+      await processingPromise;
+    } finally {
+      processingPromise = null;
+    }
+  }
+
+  async function processPropertyInternal(propertyData) {
+    // PRIORITY 1 FIX: Wrapped entire function in try-catch
     try {
       console.log('🌡️ Step 1: Processing property:', propertyData.address);
       console.log('🌡️ Step 2: State detected as:', propertyData.state);
       
-      // Check if California
       if (propertyData.state && propertyData.state !== 'CA') {
         console.log('🌡️ Not California (state=' + propertyData.state + '), skipping');
-        isProcessing = false;
         return;
       }
       
-      // If we don't have state info, check if CA is in the address
       if (!propertyData.state) {
         console.log('🌡️ No state in data, checking address string...');
         const addressUpper = propertyData.address.toUpperCase();
@@ -270,7 +268,6 @@
         
         if (!addressUpper.includes(' CA ') && !addressUpper.includes('CALIFORNIA')) {
           console.log('🌡️ Cannot confirm California location, skipping');
-          isProcessing = false;
           return;
         }
         console.log('🌡️ Address confirmed as California');
@@ -286,11 +283,9 @@
       } else {
         console.log('🌡️ Step 4: No cache, fetching climate data from APIs...');
         
-        // If we don't have coordinates, try to geocode
         if (!propertyData.latitude || !propertyData.longitude) {
           console.log('🌡️ No coordinates found, attempting to geocode address...');
           
-          // Add a small delay to respect rate limits
           await new Promise(resolve => setTimeout(resolve, 1000));
           
           const coords = await geocodeAddress(propertyData);
@@ -303,10 +298,8 @@
           }
         }
         
-        // Show initial badge with loading state for flood data
         displayRiskBadgeWithFloodLoading(propertyData);
         
-        // Track flood data load time
         floodDataLoadStartTime = Date.now();
         
         console.log('🌡️ Calling ClimateDataFetcher.fetchAllRisks...');
@@ -322,12 +315,38 @@
       console.log('🌡️ Step 9: displayRiskBadge completed');
       
     } catch (error) {
+      // PRIORITY 1 FIX: Better error handling
       console.error('🌡️ ❌ ERROR in processProperty:', error);
       console.error('🌡️ Error stack:', error.stack);
-    } finally {
-      isProcessing = false;
-      console.log('🌡️ Step 10: Processing complete, isProcessing=false');
+      
+      // Display error badge to user
+      displayErrorBadge();
     }
+  }
+
+  // PRIORITY 1 FIX: Added error badge display
+  function displayErrorBadge() {
+    const existingBadge = document.getElementById('climate-risk-badge');
+    if (existingBadge) existingBadge.remove();
+    
+    const insertionPoint = findInsertionPoint();
+    if (!insertionPoint.element) return;
+    
+    const badge = document.createElement('div');
+    badge.id = 'climate-risk-badge';
+    badge.className = 'climate-risk-badge climate-risk-moderate';
+    
+    badge.innerHTML = `
+      <div class="climate-risk-header">
+        <span class="climate-risk-icon">⚠️</span>
+        <span class="climate-risk-title">Climate Risk: Temporarily Unavailable</span>
+      </div>
+      <p style="font-size: 14px; color: #666; margin: 8px 0;">
+        Unable to load climate data at this time. Please refresh the page to try again.
+      </p>
+    `;
+    
+    insertElement(badge, insertionPoint);
   }
 
   function displayRiskBadgeWithFloodLoading(propertyData) {
@@ -340,7 +359,6 @@
       return;
     }
     
-    // Create a temporary badge showing flood data is loading
     const badge = document.createElement('div');
     badge.id = 'climate-risk-badge';
     badge.className = 'climate-risk-badge climate-risk-moderate';
@@ -351,7 +369,7 @@
         <span class="climate-risk-title">Climate Risk: Loading...</span>
       </div>
       <div class="flood-loading">
-        <span>Loading flood zone data (this may take 10-20 seconds on first visit)...</span>
+        <span>Loading climate risk data (this may take 10-20 seconds on first visit)...</span>
       </div>
     `;
     
@@ -374,11 +392,10 @@
     badge.id = 'climate-risk-badge';
     badge.className = `climate-risk-badge climate-risk-${overallRisk.level}`;
     
-    // Show flood load time if it was just loaded
     let floodLoadTimeMsg = '';
     if (floodDataLoadStartTime) {
       const loadTime = ((Date.now() - floodDataLoadStartTime) / 1000).toFixed(1);
-      if (loadTime < 30) { // Only show if reasonable
+      if (loadTime < 30) {
         floodLoadTimeMsg = `<div style="font-size: 11px; color: #666; margin-top: 4px;">Flood data loaded in ${loadTime}s</div>`;
       }
       floodDataLoadStartTime = null;
@@ -409,11 +426,9 @@
   }
 
   function findInsertionPoint() {
-    // Try multiple strategies to find insertion point
     let element = null;
     let method = null;
     
-    // Strategy 1: Find price element
     const priceSelectors = [
       '[data-test="price"]',
       '[data-testid="price"]',
@@ -433,7 +448,6 @@
       }
     }
     
-    // Strategy 2: Find summary/facts section
     if (!element) {
       const summarySelectors = [
         '[data-test="home-details-summary"]',
@@ -452,7 +466,6 @@
       }
     }
     
-    // Strategy 3: Find main content area
     if (!element) {
       const contentSelectors = [
         'article',
