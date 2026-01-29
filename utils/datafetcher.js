@@ -8,7 +8,6 @@ const ClimateDataFetcher = {
   floodZoneDataLoading: false,
   floodZoneLoadPromise: null,
   
-  // PRIORITY 1 FIX: Added timeout wrapper
   async withTimeout(promise, timeoutMs, name = 'Operation') {
     return Promise.race([
       promise,
@@ -26,14 +25,12 @@ const ClimateDataFetcher = {
       heat: null
     };
     
-    // PRIORITY 1 FIX: Added validation
     if (!propertyData || typeof propertyData !== 'object') {
       console.error('🌡️ Invalid property data');
       return results;
     }
     
     try {
-      // PRIORITY 1 FIX: Added individual timeouts and better error handling
       const [wildfire, flood, seaLevelRise, heat] = await Promise.allSettled([
         this.withTimeout(this.fetchWildfireRisk(propertyData), 10000, 'Wildfire'),
         this.withTimeout(this.fetchFloodRiskLocal(propertyData), 30000, 'Flood'),
@@ -90,6 +87,20 @@ const ClimateDataFetcher = {
         const loadTime = ((performance.now() - startTime) / 1000).toFixed(1);
         console.log(`🌊 Flood data loaded in ${loadTime}s (${geojson.features?.length || 0} features)`);
         
+        // PRIORITY 2 FIX: Pre-calculate bounding boxes if missing
+        if (geojson.features && geojson.features.length > 0) {
+          let calculatedCount = 0;
+          for (const feature of geojson.features) {
+            if (!feature.bbox && feature.geometry) {
+              feature.bbox = this.calculateBoundingBox(feature.geometry);
+              calculatedCount++;
+            }
+          }
+          if (calculatedCount > 0) {
+            console.log(`🌊 Calculated ${calculatedCount} missing bounding boxes`);
+          }
+        }
+        
         this.floodZoneData = geojson;
         return geojson;
         
@@ -104,8 +115,49 @@ const ClimateDataFetcher = {
     return this.floodZoneLoadPromise;
   },
   
+  // PRIORITY 2 FIX: New function to calculate bounding boxes
+  calculateBoundingBox(geometry) {
+    if (!geometry || !geometry.coordinates) return null;
+    
+    const coords = [];
+    
+    const extractCoords = (coordArray) => {
+      if (Array.isArray(coordArray[0])) {
+        coordArray.forEach(extractCoords);
+      } else {
+        coords.push(coordArray);
+      }
+    };
+    
+    extractCoords(geometry.coordinates);
+    
+    if (coords.length === 0) return null;
+    
+    const lons = coords.map(c => c[0]);
+    const lats = coords.map(c => c[1]);
+    
+    return [
+      Math.min(...lons),  // minX
+      Math.min(...lats),  // minY
+      Math.max(...lons),  // maxX
+      Math.max(...lats)   // maxY
+    ];
+  },
+  
+  // PRIORITY 2 FIX: New function for fast rejection test
+  hasBoundingBoxIntersection(point, feature) {
+    if (!feature.bbox || !Array.isArray(feature.bbox) || feature.bbox.length !== 4) {
+      return true; // No bbox available, must check geometry
+    }
+    
+    const [x, y] = point;
+    const [minX, minY, maxX, maxY] = feature.bbox;
+    
+    // Quick rejection: check if point is outside bounding box
+    return x >= minX && x <= maxX && y >= minY && y <= maxY;
+  },
+  
   pointInPolygon(point, polygon) {
-    // PRIORITY 1 FIX: Added validation
     if (!Array.isArray(point) || point.length !== 2) return false;
     if (!Array.isArray(polygon) || polygon.length === 0) return false;
     
@@ -154,7 +206,6 @@ const ClimateDataFetcher = {
   },
   
   async fetchFloodRiskLocal(propertyData) {
-    // PRIORITY 1 FIX: Added coordinate validation
     if (!propertyData.latitude || !propertyData.longitude) {
       console.log('🌊 No coordinates available for flood lookup');
       return {
@@ -165,7 +216,6 @@ const ClimateDataFetcher = {
       };
     }
     
-    // PRIORITY 1 FIX: Added type validation
     if (typeof propertyData.latitude !== 'number' || typeof propertyData.longitude !== 'number') {
       console.warn('🌊 Invalid coordinate types');
       return {
@@ -184,8 +234,24 @@ const ClimateDataFetcher = {
       
       const matchingZones = [];
       
+      // PRIORITY 2 FIX: Added performance counter
+      const startCheck = performance.now();
+      let bboxRejections = 0;
+      let bboxAccepts = 0;
+      let geometryChecks = 0;
+      
       for (const feature of geojson.features) {
+        // PRIORITY 2 FIX: Fast bounding box rejection test
+        if (!this.hasBoundingBoxIntersection(point, feature)) {
+          bboxRejections++;
+          continue; // Skip expensive geometry check
+        }
+        
+        bboxAccepts++;
+        
+        // Only do expensive geometry check if bbox intersects
         if (this.pointInGeometry(point, feature.geometry)) {
+          geometryChecks++;
           const zone = feature.properties.FLD_ZONE;
           const riskLevel = feature.properties.risk_level;
           
@@ -196,6 +262,10 @@ const ClimateDataFetcher = {
           });
         }
       }
+      
+      // PRIORITY 2 FIX: Log performance metrics
+      const checkTime = ((performance.now() - startCheck) / 1000).toFixed(3);
+      console.log(`🌊 Flood check completed in ${checkTime}s (bbox rejected: ${bboxRejections}, accepted: ${bboxAccepts}, geometry checks: ${geometryChecks})`);
       
       if (matchingZones.length === 0) {
         console.log('🌊 No flood zone found for this location');
@@ -219,7 +289,6 @@ const ClimateDataFetcher = {
       
     } catch (error) {
       console.error('🌊 Error fetching local flood risk:', error);
-      // PRIORITY 1 FIX: Return graceful error instead of throwing
       return {
         available: false,
         level: 0,
@@ -269,7 +338,6 @@ const ClimateDataFetcher = {
   },
   
   async fetchWildfireRisk(propertyData) {
-    // PRIORITY 1 FIX: Added coordinate validation
     if (!propertyData.latitude || !propertyData.longitude) {
       return {
         available: false,
@@ -308,7 +376,6 @@ const ClimateDataFetcher = {
       
       const data = await response.json();
       
-      // PRIORITY 1 FIX: Added API error check
       if (data.error) {
         throw new Error(`CAL FIRE API error: ${data.error.message || 'Unknown error'}`);
       }
@@ -332,7 +399,6 @@ const ClimateDataFetcher = {
       
     } catch (error) {
       console.error('🔥 Error fetching wildfire risk:', error);
-      // PRIORITY 1 FIX: Return graceful error
       return {
         available: false,
         level: 0,
@@ -380,7 +446,6 @@ const ClimateDataFetcher = {
   },
   
   async fetchSeaLevelRiseRisk(propertyData) {
-    // PRIORITY 1 FIX: Added coordinate validation
     if (!propertyData.latitude || !propertyData.longitude) {
       console.log('📈 No coordinates available for sea level rise lookup');
       return {
@@ -424,7 +489,6 @@ const ClimateDataFetcher = {
   },
   
   async fetchHeatRisk(propertyData) {
-    // PRIORITY 1 FIX: Added coordinate validation
     if (!propertyData.latitude || !propertyData.longitude) {
       return {
         available: false,
@@ -476,7 +540,6 @@ const ClimateDataFetcher = {
       let count = 0;
       
       result.data.forEach(yearData => {
-        // PRIORITY 1 FIX: Added validation
         if (yearData && Array.isArray(yearData) && yearData[2] != null) {
           totalMaxTemp += yearData[2];
           count++;
@@ -494,7 +557,6 @@ const ClimateDataFetcher = {
       
     } catch (error) {
       console.error('☀️ Error fetching heat risk from Cal-Adapt:', error);
-      // PRIORITY 1 FIX: Return graceful error
       return {
         available: false,
         level: 0,
