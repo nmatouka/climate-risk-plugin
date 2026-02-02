@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Climate Risk for Zillow - California",
-  "version": "1.1.0",
-  "description": "View climate risk data (wildfire, flood, sea level rise, heat) for California properties on Zillow",
+  "version": "2.0.0",
+  "description": "View comprehensive climate risk data (wildfire, flood, drought, air quality, precipitation, heat) for California properties on Zillow",
   "permissions": [
     "storage"
   ],

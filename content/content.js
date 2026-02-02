@@ -7,19 +7,17 @@
   };
 
   let currentPropertyData = null;
-  // PRIORITY 1 FIX: Changed from simple flag to promise-based locking
   let processingPromise = null;
   let hasShownSearchPageMessage = false;
   let floodDataLoadStartTime = null;
 
   function init() {
-    console.log('🌡️ Climate Risk Extension: Initialized');
+    console.log('🌡️ Climate Risk Extension: Initialized (v2.0 with Tier 1 enhancements)');
     setInterval(checkForPropertyData, CONFIG.CHECK_INTERVAL);
     setTimeout(checkForPropertyData, 2000);
   }
 
   function checkForPropertyData() {
-    // PRIORITY 1 FIX: Don't check if already processing
     if (processingPromise) return;
     
     if (isSearchResultsPage() && !hasShownSearchPageMessage) {
@@ -181,7 +179,7 @@
       
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'ClimateRiskExtension/1.0'
+          'User-Agent': 'ClimateRiskExtension/2.0'
         }
       });
       
@@ -208,7 +206,7 @@
         
         const fallbackResponse = await fetch(fallbackUrl, {
           headers: {
-            'User-Agent': 'ClimateRiskExtension/1.0'
+            'User-Agent': 'ClimateRiskExtension/2.0'
           }
         });
         
@@ -232,15 +230,12 @@
     }
   }
 
-  // PRIORITY 1 FIX: Replaced simple flag with promise-based locking
   async function processProperty(propertyData) {
-    // Wait for any existing processing to complete
     if (processingPromise) {
       console.log('🌡️ Already processing another property, waiting...');
       await processingPromise;
     }
     
-    // Start new processing
     processingPromise = processPropertyInternal(propertyData);
     
     try {
@@ -251,7 +246,6 @@
   }
 
   async function processPropertyInternal(propertyData) {
-    // PRIORITY 1 FIX: Wrapped entire function in try-catch
     try {
       console.log('🌡️ Step 1: Processing property:', propertyData.address);
       console.log('🌡️ Step 2: State detected as:', propertyData.state);
@@ -315,16 +309,12 @@
       console.log('🌡️ Step 9: displayRiskBadge completed');
       
     } catch (error) {
-      // PRIORITY 1 FIX: Better error handling
       console.error('🌡️ ❌ ERROR in processProperty:', error);
       console.error('🌡️ Error stack:', error.stack);
-      
-      // Display error badge to user
       displayErrorBadge();
     }
   }
 
-  // PRIORITY 1 FIX: Added error badge display
   function displayErrorBadge() {
     const existingBadge = document.getElementById('climate-risk-badge');
     if (existingBadge) existingBadge.remove();
@@ -369,7 +359,7 @@
         <span class="climate-risk-title">Climate Risk: Loading...</span>
       </div>
       <div class="flood-loading">
-        <span>Loading climate risk data (this may take 10-20 seconds on first visit)...</span>
+        <span>Loading climate risk data (including extreme precipitation and heat projections)...</span>
       </div>
     `;
     
@@ -396,7 +386,7 @@
     if (floodDataLoadStartTime) {
       const loadTime = ((Date.now() - floodDataLoadStartTime) / 1000).toFixed(1);
       if (loadTime < 30) {
-        floodLoadTimeMsg = `<div style="font-size: 11px; color: #666; margin-top: 4px;">Flood data loaded in ${loadTime}s</div>`;
+        floodLoadTimeMsg = `<div style="font-size: 11px; color: #666; margin-top: 4px;">Climate data loaded in ${loadTime}s</div>`;
       }
       floodDataLoadStartTime = null;
     }
@@ -503,7 +493,9 @@
       riskData.wildfire?.level || 0,
       riskData.flood?.level || 0,
       riskData.seaLevelRise?.level || 0,
-      riskData.heat?.level || 0
+      riskData.heat?.level || 0,
+      riskData.extremePrecipitation?.level || 0, // Tier 1
+      riskData.extremeHeatDays?.level || 0       // Tier 1
     ];
     
     const maxRisk = Math.max(...risks);
@@ -520,15 +512,20 @@
     const panel = document.createElement('div');
     panel.className = 'climate-risk-details';
     
+    // Updated risks array - removed drought and air quality (no Cal-Adapt data available)
     const risks = [
       { name: 'Wildfire', icon: '🔥', data: riskData.wildfire, source: 'CAL FIRE',
         url: 'https://osfm.fire.ca.gov/divisions/wildfire-planning-engineering/wildland-hazards-building-codes/fire-hazard-severity-zones-maps/' },
       { name: 'Flood', icon: '🌊', data: riskData.flood, source: 'FEMA',
         url: 'https://msc.fema.gov/portal/home' },
-      { name: 'Sea Level Rise', icon: '📈', data: riskData.seaLevelRise, source: 'CA Coastal Commission',
-        url: 'https://www.coastal.ca.gov/climate/slr/' },
       { name: 'Extreme Heat', icon: '☀️', data: riskData.heat, source: 'Cal-Adapt',
-        url: 'https://cal-adapt.org/' }
+        url: 'https://cal-adapt.org/' },
+      { name: 'Extreme Heat Days', icon: '🔥', data: riskData.extremeHeatDays, source: 'Cal-Adapt',
+        url: 'https://cal-adapt.org/' },
+      { name: 'Extreme Precipitation', icon: '🌧️', data: riskData.extremePrecipitation, source: 'Cal-Adapt',
+        url: 'https://cal-adapt.org/' },
+      { name: 'Sea Level Rise', icon: '📈', data: riskData.seaLevelRise, source: 'CA Coastal Commission',
+        url: 'https://www.coastal.ca.gov/climate/slr/' }
     ];
     
     let detailsHTML = '<div class="climate-risk-list">';
@@ -565,6 +562,7 @@
       <div class="climate-risk-disclaimer">
         <strong>Disclaimer:</strong> This information is for educational purposes only. 
         Climate risk data is sourced from Cal-Adapt, CAL FIRE, FEMA, and California Coastal Commission. 
+        Mid-century projections (2050-2060) shown for forward-looking risks.
         Consult with professionals and review official hazard maps before making real estate decisions.
       </div>
     `;
