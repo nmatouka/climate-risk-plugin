@@ -1,18 +1,31 @@
 {
   "manifest_version": 3,
   "name": "Climate Risk for Zillow - California",
-  "version": "2.0.0",
-  "description": "View comprehensive climate risk data (wildfire, flood, drought, air quality, precipitation, heat) for California properties on Zillow",
+  "version": "1.2.0",
+  "description": "Educational climate risk information for California properties on Zillow",
   "permissions": [
     "storage"
   ],
   "host_permissions": [
-    "https://*.zillow.com/*",
+    "*://www.zillow.com/*",
+    "*://*.zillowstatic.com/*",
     "https://api.cal-adapt.org/*",
-    "https://nominatim.openstreetmap.org/*",
-    "https://services.gis.ca.gov/*",
-    "https://hazards.fema.gov/*",
-    "https://nmatouka.github.io/*"
+    "https://osfm.fire.ca.gov/*",
+    "https://nominatim.openstreetmap.org/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://www.zillow.com/*"],
+      "js": [
+        "utils/cache.js",
+        "utils/dataFetcher.js",
+        "content/content.js"
+      ],
+      "css": [
+        "content/styles.css"
+      ],
+      "run_at": "document_idle"
+    }
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -20,22 +33,11 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
-  },
-  "background": {
-    "service_worker": "background/background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://*.zillow.com/*"],
-      "js": ["utils/cache.js", "utils/dataFetcher.js", "content/content.js"],
-      "css": ["content/content.css"],
-      "run_at": "document_idle"
-    }
-  ]
+    },
+    "default_title": "Climate Risk for Zillow"
+  }
 }

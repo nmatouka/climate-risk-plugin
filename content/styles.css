@@ -1,0 +1,353 @@
+/* 
+ * Climate Risk Extension - Premium Glass Design
+ * Color: Cool Slate with Blue Tint (Zillow Optimized)
+ * Gradient: #546e7a → #37474f
+ */
+
+/* Main Badge Container */
+.climate-risk-badge {
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  margin: 24px 0;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.climate-risk-badge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.climate-risk-badge:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 12px 48px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Risk Level Gradient Backgrounds */
+.climate-risk-minimal::before {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
+}
+
+.climate-risk-low::before {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+}
+
+.climate-risk-moderate::before {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%);
+}
+
+.climate-risk-high::before {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+}
+
+.climate-risk-severe::before {
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.15) 0%, rgba(127, 29, 29, 0.1) 100%);
+}
+
+.climate-risk-badge:hover::before {
+  opacity: 1;
+}
+
+/* Header Section */
+.climate-risk-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.climate-risk-icon {
+  font-size: 36px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+.climate-risk-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Toggle Button - Cool Slate with Blue Tint */
+.climate-risk-toggle {
+  width: 100%;
+  padding: 14px 24px;
+  margin-top: 16px;
+  background: linear-gradient(135deg, #546e7a 0%, #37474f 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 4px 12px rgba(84, 110, 122, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.climate-risk-toggle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.climate-risk-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 20px rgba(84, 110, 122, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.climate-risk-toggle:hover::before {
+  left: 100%;
+}
+
+.climate-risk-toggle:active {
+  transform: translateY(0);
+}
+
+/* Detail Panel */
+.climate-risk-details {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: 0;
+}
+
+.climate-risk-details-visible {
+  max-height: 2000px;
+  opacity: 1;
+  margin-top: 20px;
+}
+
+/* Risk Items */
+.climate-risk-list {
+  display: grid;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.climate-risk-item {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: all 0.3s ease;
+}
+
+.climate-risk-item:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateX(4px);
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.risk-item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.risk-icon {
+  font-size: 26px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.risk-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+}
+
+/* Risk Level Badges - Glassmorphic Pills */
+.risk-level {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.risk-level-minimal {
+  background: rgba(209, 250, 229, 0.9);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #065f46;
+}
+
+.risk-level-low {
+  background: rgba(219, 234, 254, 0.9);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #1e40af;
+}
+
+.risk-level-moderate {
+  background: rgba(254, 243, 199, 0.9);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #92400e;
+}
+
+.risk-level-high {
+  background: rgba(254, 226, 226, 0.9);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #991b1b;
+}
+
+.risk-level-severe {
+  background: rgba(127, 29, 29, 0.95);
+  border: 1px solid rgba(153, 27, 27, 0.5);
+  color: white;
+}
+
+.risk-level-unknown {
+  background: rgba(243, 244, 246, 0.9);
+  border: 1px solid rgba(156, 163, 175, 0.3);
+  color: #6b7280;
+}
+
+/* Risk Details Text */
+.risk-details {
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+  margin-top: 8px;
+  padding-left: 38px;
+}
+
+/* Source Links */
+.risk-source {
+  display: inline-block;
+  margin-top: 10px;
+  padding-left: 38px;
+  font-size: 13px;
+  color: #546e7a;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+.risk-source:hover {
+  color: #37474f;
+  text-decoration: underline;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+/* Disclaimer */
+.climate-risk-disclaimer {
+  margin-top: 20px;
+  padding: 18px;
+  background: rgba(254, 243, 199, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.6;
+  box-shadow: 
+    0 2px 8px rgba(245, 158, 11, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.climate-risk-disclaimer strong {
+  color: #92400e;
+  font-weight: 700;
+}
+
+/* Loading State */
+.flood-loading {
+  padding: 14px 0;
+  color: #6b7280;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.flood-loading::before {
+  content: "⏳";
+  font-size: 20px;
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { 
+    transform: translateY(0px);
+    opacity: 1;
+  }
+  50% { 
+    transform: translateY(-4px);
+    opacity: 0.7;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .climate-risk-badge {
+    padding: 20px;
+    margin: 20px 0;
+  }
+  
+  .climate-risk-title {
+    font-size: 20px;
+  }
+  
+  .risk-details {
+    padding-left: 0;
+    margin-top: 12px;
+  }
+  
+  .risk-source {
+    padding-left: 0;
+  }
+}
