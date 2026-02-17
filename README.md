@@ -2,6 +2,8 @@
 
 A free, open-source browser extension that displays educational climate risk information for California properties on Zillow, helping homebuyers make informed decisions about climate hazards. This is a proof of concept and should not be relied upon to make purchasing decisions.
 
+![Climate Risk Extension Screenshot](docs/demo-screenshot.png)
+
 ## 🆕 Version 1.2.0 - Enhanced Climate Projections
 
 This version adds **two new climate risk indicators** based on Cal-Adapt's future climate projections:
