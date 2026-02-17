@@ -52,11 +52,14 @@ const ClimateDataFetcher = {
     ]);
   },
   
-  /**
-   * Log error with emoji prefix
-   */
+  DEBUG: false,
+
+  debug(...args) {
+    if (this.DEBUG) console.log(...args);
+  },
+
   logError(emoji, message, error) {
-    console.error(`${emoji} ${message}:`, error);
+    if (this.DEBUG) console.error(`${emoji} ${message}:`, error);
   },
   
   // ============================================
@@ -79,12 +82,12 @@ const ClimateDataFetcher = {
     };
     
     if (!propertyData || typeof propertyData !== 'object') {
-      console.error('🌡️ Invalid property data');
+      this.logError('', 'Invalid property data', new Error('Missing or invalid property data'));
       return results;
     }
     
     try {
-      console.log('🌡️ Fetching all climate risks (including Tier 1 enhancements)...');
+      this.debug('Fetching all climate risks...');
       
       // Fetch all risks in parallel
       const [
@@ -123,7 +126,7 @@ const ClimateDataFetcher = {
       else this.logError('🔥', 'Extreme heat days fetch failed', extremeHeatDays.reason);
       
     } catch (error) {
-      console.error('🌡️ Error fetching climate risks:', error);
+      this.logError('', 'Error fetching climate risks', error);
     }
     
     return results;
@@ -147,7 +150,7 @@ const ClimateDataFetcher = {
     }
     
     try {
-      console.log('🌧️ Fetching extreme precipitation risk from Cal-Adapt...');
+      this.debug('Fetching extreme precipitation risk from Cal-Adapt...');
       
       const slug = CLIMATE_CONSTANTS.SLUGS.PRECIPITATION;
       const point = `POINT(${propertyData.longitude} ${propertyData.latitude})`;
@@ -188,17 +191,17 @@ const ClimateDataFetcher = {
       }
       
       const avgAnnualPrecip = totalPrecip / count;
-      console.log('🌧️ Average annual precipitation:', avgAnnualPrecip.toFixed(1), 'mm');
+      this.debug('Average annual precipitation:', avgAnnualPrecip.toFixed(1), 'mm');
       
       return this.classifyExtremePrecipitationRisk(avgAnnualPrecip);
       
     } catch (error) {
-      this.logError('🌧️', 'Error fetching extreme precipitation risk', error);
+      this.logError('', 'Error fetching extreme precipitation risk', error);
       return {
         available: false,
         level: 0,
-        description: 'Error fetching data',
-        details: `Unable to retrieve precipitation data: ${error.message}`
+        description: 'Data unavailable',
+        details: 'Unable to retrieve precipitation data at this time. Please try again later.'
       };
     }
   },
@@ -263,7 +266,7 @@ const ClimateDataFetcher = {
     }
     
     try {
-      console.log('🔥 Fetching extreme heat days from Cal-Adapt...');
+      this.debug('Fetching extreme heat days from Cal-Adapt...');
       
       const slug = CLIMATE_CONSTANTS.SLUGS.TASMAX;
       const point = `POINT(${propertyData.longitude} ${propertyData.latitude})`;
@@ -310,18 +313,18 @@ const ClimateDataFetcher = {
       // This is simplified - ideally would query daily data
       const estimatedDays = this.estimateExtremeDays(avgMaxTempF);
       
-      console.log('🔥 Average max temp:', avgMaxTempF.toFixed(1), '°F');
-      console.log('🔥 Estimated days >100°F:', estimatedDays);
+      this.debug('Average max temp:', avgMaxTempF.toFixed(1), '°F');
+      this.debug('Estimated days >100°F:', estimatedDays);
       
       return this.classifyExtremeHeatDays(estimatedDays, avgMaxTempF);
       
     } catch (error) {
-      this.logError('🔥', 'Error fetching extreme heat days', error);
+      this.logError('', 'Error fetching extreme heat days', error);
       return {
         available: false,
         level: 0,
-        description: 'Error fetching data',
-        details: `Unable to retrieve extreme heat data: ${error.message}`
+        description: 'Data unavailable',
+        details: 'Unable to retrieve extreme heat data at this time. Please try again later.'
       };
     }
   },
@@ -385,7 +388,7 @@ const ClimateDataFetcher = {
   // Flood zone loading and checking
   async loadFloodZoneData() {
     if (this.floodZoneData) {
-      console.log('🌊 Returning cached flood data');
+      this.debug('Returning cached flood data');
       return this.floodZoneData;
     }
     
@@ -396,7 +399,7 @@ const ClimateDataFetcher = {
     this.floodZoneDataLoading = true;
     this.floodZoneLoadPromise = (async () => {
       try {
-        console.log('🌊 Loading flood zone data from GitHub Pages...');
+        this.debug('Loading flood zone data...');
         const startTime = performance.now();
         
         const response = await fetch(this.FLOOD_ZONES_URL, {
@@ -411,7 +414,7 @@ const ClimateDataFetcher = {
         
         const geojson = await response.json();
         const loadTime = ((performance.now() - startTime) / 1000).toFixed(1);
-        console.log(`🌊 Flood data loaded in ${loadTime}s (${geojson.features?.length || 0} features)`);
+        this.debug(`Flood data loaded in ${loadTime}s (${geojson.features?.length || 0} features)`);
         
         if (geojson.features && geojson.features.length > 0) {
           let calculatedCount = 0;
@@ -422,7 +425,7 @@ const ClimateDataFetcher = {
             }
           }
           if (calculatedCount > 0) {
-            console.log(`🌊 Calculated ${calculatedCount} missing bounding boxes`);
+            this.debug(`Calculated ${calculatedCount} missing bounding boxes`);
           }
         }
         
@@ -430,7 +433,7 @@ const ClimateDataFetcher = {
         return geojson;
         
       } catch (error) {
-        console.error('🌊 Error loading flood zone data:', error);
+        this.logError('', 'Error loading flood zone data', error);
         throw error;
       } finally {
         this.floodZoneDataLoading = false;
@@ -529,7 +532,6 @@ const ClimateDataFetcher = {
   
   async fetchFloodRiskLocal(propertyData) {
     if (!propertyData.latitude || !propertyData.longitude) {
-      console.log('🌊 No coordinates available for flood lookup');
       return {
         available: false,
         level: 0,
@@ -537,14 +539,13 @@ const ClimateDataFetcher = {
         details: 'Coordinates not found. Cannot determine flood zone.'
       };
     }
-    
+
     if (typeof propertyData.latitude !== 'number' || typeof propertyData.longitude !== 'number') {
-      console.warn('🌊 Invalid coordinate types');
       return {
         available: false,
         level: 0,
-        description: 'Invalid coordinates',
-        details: 'Coordinate data is not in valid format.'
+        description: 'Location data unavailable',
+        details: 'Coordinate data is not available.'
       };
     }
     
@@ -552,7 +553,7 @@ const ClimateDataFetcher = {
       const geojson = await this.loadFloodZoneData();
       
       const point = [propertyData.longitude, propertyData.latitude];
-      console.log('🌊 Checking flood zones for:', point);
+      this.debug('Checking flood zones for:', point);
       
       const matchingZones = [];
       
@@ -583,10 +584,10 @@ const ClimateDataFetcher = {
       }
       
       const checkTime = ((performance.now() - startCheck) / 1000).toFixed(3);
-      console.log(`🌊 Flood check completed in ${checkTime}s (bbox rejected: ${bboxRejections}, accepted: ${bboxAccepts}, geometry checks: ${geometryChecks})`);
+      this.debug(`Flood check completed in ${checkTime}s (bbox rejected: ${bboxRejections}, accepted: ${bboxAccepts}, geometry matches: ${geometryChecks})`);
       
       if (matchingZones.length === 0) {
-        console.log('🌊 No flood zone found for this location');
+        this.debug('No flood zone found for this location');
         return {
           available: true,
           level: 0,
@@ -601,17 +602,17 @@ const ClimateDataFetcher = {
         return (riskOrder[zone.riskLevel] > riskOrder[max.riskLevel]) ? zone : max;
       });
       
-      console.log('🌊 Found flood zone:', highestRisk.zone, 'Risk:', highestRisk.riskLevel);
+      this.debug('Found flood zone:', highestRisk.zone, 'Risk:', highestRisk.riskLevel);
       
       return this.classifyFloodRiskLocal(highestRisk.zone, highestRisk.riskLevel);
       
     } catch (error) {
-      console.error('🌊 Error fetching local flood risk:', error);
+      this.logError('', 'Error fetching local flood risk', error);
       return {
         available: false,
         level: 0,
-        description: 'Error fetching data',
-        details: `Unable to load flood zone data: ${error.message}`
+        description: 'Data unavailable',
+        details: 'Unable to load flood zone data at this time. Please try again later.'
       };
     }
   },
@@ -684,7 +685,7 @@ const ClimateDataFetcher = {
       });
       
       const url = `${this.CALFIRE_FHSZ_URL}?${params}`;
-      console.log('🔥 Fetching wildfire data from CAL FIRE');
+      this.debug('Fetching wildfire data from CAL FIRE');
       
       const response = await fetch(url);
       
@@ -703,7 +704,7 @@ const ClimateDataFetcher = {
         const hazClass = feature.HAZ_CLASS;
         const hazCode = feature.HAZ_CODE;
         
-        console.log('🔥 Wildfire hazard class:', hazClass);
+        this.debug('Wildfire hazard class:', hazClass);
         
         return this.classifyWildfireRisk(hazClass, hazCode);
       } else {
@@ -716,12 +717,12 @@ const ClimateDataFetcher = {
       }
       
     } catch (error) {
-      console.error('🔥 Error fetching wildfire risk:', error);
+      this.logError('', 'Error fetching wildfire risk', error);
       return {
         available: false,
         level: 0,
-        description: 'Error fetching data',
-        details: `Unable to retrieve wildfire data: ${error.message}`
+        description: 'Data unavailable',
+        details: 'Unable to retrieve wildfire data at this time. Please try again later.'
       };
     }
   },
@@ -765,7 +766,7 @@ const ClimateDataFetcher = {
   
   async fetchSeaLevelRiseRisk(propertyData) {
     if (!propertyData.latitude || !propertyData.longitude) {
-      console.log('📈 No coordinates available for sea level rise lookup');
+      this.debug('No coordinates available for sea level rise lookup');
       return {
         available: false,
         level: 0,
@@ -781,13 +782,10 @@ const ClimateDataFetcher = {
       };
     }
     
-    console.log('📈 Checking if property is near coast...');
     const isNearCoast = this.isNearCaliforniaCoast(
-      propertyData.latitude, 
+      propertyData.latitude,
       propertyData.longitude
     );
-    
-    console.log('📈 Near coast?', isNearCoast);
     
     if (!isNearCoast) {
       return {
@@ -839,7 +837,7 @@ const ClimateDataFetcher = {
         `start=${startDate}&` +
         `end=${endDate}`;
       
-      console.log('☀️ Fetching extreme heat data from Cal-Adapt');
+      this.debug('Fetching extreme heat data from Cal-Adapt');
       
       const response = await fetch(url, {
         method: 'GET',
@@ -876,12 +874,12 @@ const ClimateDataFetcher = {
       return this.classifyHeatRisk(avgMaxTempF);
       
     } catch (error) {
-      console.error('☀️ Error fetching heat risk from Cal-Adapt:', error);
+      this.logError('', 'Error fetching heat risk from Cal-Adapt', error);
       return {
         available: false,
         level: 0,
-        description: 'Error fetching data',
-        details: `Unable to retrieve extreme heat data: ${error.message}`
+        description: 'Data unavailable',
+        details: 'Unable to retrieve extreme heat data at this time. Please try again later.'
       };
     }
   },

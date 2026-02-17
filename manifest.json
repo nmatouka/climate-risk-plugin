@@ -1,17 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Climate Risk for Zillow - California",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Educational climate risk information for California properties on Zillow",
   "permissions": [
     "storage"
   ],
   "host_permissions": [
     "*://www.zillow.com/*",
-    "*://*.zillowstatic.com/*",
     "https://api.cal-adapt.org/*",
-    "https://osfm.fire.ca.gov/*",
-    "https://nominatim.openstreetmap.org/*"
+    "https://services.gis.ca.gov/*",
+    "https://nominatim.openstreetmap.org/*",
+    "https://nmatouka.github.io/*"
   ],
   "content_scripts": [
     {
@@ -33,11 +33,15 @@
     "128": "icons/icon128.png"
   },
   "action": {
+    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
     "default_title": "Climate Risk for Zillow"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
