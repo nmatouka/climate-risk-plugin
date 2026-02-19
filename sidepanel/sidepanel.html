@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Climate Risk</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="panel-header">
+    <span class="panel-header-icon">🌡️</span>
+    <div>
+      <h1 class="panel-title">Climate Risk</h1>
+      <p class="panel-subtitle">California Properties</p>
+    </div>
+  </div>
+
+  <main id="panel-main">
+
+    <!-- State: not on a supported page -->
+    <div id="state-not-supported" class="state-message" hidden>
+      <div class="state-icon">🏠</div>
+      <p>Navigate to a property listing on a supported real estate website to see climate risk data.</p>
+    </div>
+
+    <!-- State: on search results -->
+    <div id="state-search" class="state-message" hidden>
+      <div class="state-icon">🔍</div>
+      <p>You are viewing search results. Open an individual property listing to see climate risk data.</p>
+    </div>
+
+    <!-- State: non-CA property -->
+    <div id="state-non-ca" class="state-message" hidden>
+      <div class="state-icon">🗺️</div>
+      <p>This extension provides climate risk data for <strong>California properties only</strong>.</p>
+      <p id="non-ca-address" class="address-display"></p>
+    </div>
+
+    <!-- State: loading -->
+    <div id="state-loading" class="state-message" hidden>
+      <p id="loading-address" class="address-display"></p>
+      <div class="flood-loading">
+        <span>Loading climate risk data...</span>
+      </div>
+    </div>
+
+    <!-- State: error -->
+    <div id="state-error" class="state-message" hidden>
+      <div class="state-icon">⚠️</div>
+      <p class="error-heading">Climate Risk: Temporarily Unavailable</p>
+      <p id="error-detail" class="error-detail"></p>
+    </div>
+
+    <!-- State: results -->
+    <div id="state-results" hidden>
+      <p id="property-address" class="address-display"></p>
+      <div id="overall-risk-header" class="climate-risk-header"></div>
+      <div id="risk-container" class="climate-risk-list"></div>
+      <div id="disclaimer" class="climate-risk-disclaimer"></div>
+    </div>
+
+  </main>
+
+  <details class="panel-about">
+    <summary>About &amp; Data Sources</summary>
+    <div class="about-content">
+      <p>This extension displays climate risk information for California properties, including:</p>
+      <ul>
+        <li>Wildfire risk</li>
+        <li>Flood zones</li>
+        <li>Sea level rise</li>
+        <li>Extreme heat</li>
+        <li>Extreme heat days</li>
+        <li>Extreme precipitation</li>
+      </ul>
+
+      <h3>Data Sources</h3>
+      <ul class="source-list">
+        <li><a href="https://osfm.fire.ca.gov/" target="_blank" rel="noopener noreferrer">CAL FIRE</a></li>
+        <li><a href="https://msc.fema.gov/" target="_blank" rel="noopener noreferrer">FEMA</a></li>
+        <li><a href="https://www.coastal.ca.gov/" target="_blank" rel="noopener noreferrer">CA Coastal Commission</a></li>
+        <li><a href="https://cal-adapt.org/" target="_blank" rel="noopener noreferrer">Cal-Adapt</a></li>
+      </ul>
+
+      <h3>Privacy</h3>
+      <p>Property addresses and coordinates are processed locally to display climate risk data. No personal data is collected, shared, or transmitted beyond the public APIs listed above. Cached data is stored on your device only.</p>
+    </div>
+  </details>
+
+  <footer class="panel-footer">
+    <a href="https://github.com/nmatouka/climate-risk-plugin" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+  </footer>
+
+  <script src="../utils/cache.js"></script>
+  <script src="../utils/dataFetcher.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
