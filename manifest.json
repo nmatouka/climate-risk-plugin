@@ -7,7 +7,8 @@
     "storage",
     "sidePanel",
     "activeTab",
-    "tabs"
+    "tabs",
+    "notifications"
   ],
   "host_permissions": [
     "*://www.zillow.com/*",

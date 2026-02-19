@@ -2,8 +2,19 @@
 
 // Open side panel on icon click (setPanelBehavior is the recommended approach;
 // it does not require a manual onClicked listener).
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
+  // On first install, prompt the user to pin the extension so the badge is visible.
+  if (details.reason === 'install') {
+    chrome.notifications.create('pin-prompt', {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Pin Climate Risk to your toolbar',
+      message: 'Click the 🧩 puzzle piece in Chrome → find Climate Risk → click the 📌 pin. The icon will show a badge whenever you view a property listing.',
+      priority: 1
+    });
+  }
 });
 
 function isPropertyUrl(url) {
