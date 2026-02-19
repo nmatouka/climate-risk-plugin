@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Climate Risk - California",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Educational climate risk information for California real estate properties",
   "permissions": [
     "storage",
@@ -12,6 +12,11 @@
   ],
   "host_permissions": [
     "*://www.zillow.com/*",
+    "*://www.realtor.com/*",
+    "*://www.redfin.com/*",
+    "*://www.trulia.com/*",
+    "*://www.compass.com/*",
+    "*://www.homes.com/*",
     "https://api.cal-adapt.org/*",
     "https://services.gis.ca.gov/*",
     "https://nominatim.openstreetmap.org/*",

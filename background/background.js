@@ -18,7 +18,16 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 function isPropertyUrl(url) {
-  return url ? /zillow\.com\/homedetails\/[^/]+\/\d+_zpid/.test(url) : false;
+  if (!url) return false;
+  return (
+    /zillow\.com\/homedetails\/[^/]+\/\d+_zpid/.test(url)          ||
+    /realtor\.com\/realestateandhomes-detail\/[^/?#]+/.test(url)    ||
+    /redfin\.com\/[A-Z]{2}\/[^/]+\/[^/]+\/home\/\d+/.test(url)     ||
+    /trulia\.com\/p\/[a-z]{2}\/[^/]+\/[^/?#]+--\d+/.test(url)      ||
+    /trulia\.com\/building\/[^/?#]+/.test(url)                      ||
+    /compass\.com\/homedetails\/[^/]+\/[^/]+_lid/.test(url)         ||
+    /homes\.com\/property\/[^/]+\/[a-z0-9]+/.test(url)
+  );
 }
 
 // Show a badge on the extension icon when the user is on a property page,

@@ -10,61 +10,137 @@ function debug(...args) {
   if (DEBUG) console.log('[ClimateRisk]', ...args);
 }
 
-// ─── URL Parsing ────────────────────────────────────────────────────────────
+// ─── Multi-Site URL Parsing ──────────────────────────────────────────────────
 // Reads the property address from the browser URL bar.
-// Example URL: /homedetails/123-Main-St-San-Francisco-CA-94102/2089934829_zpid/
-// The address slug encodes the full address with hyphens in place of spaces.
+// Supports: Zillow, Realtor.com, Redfin, Trulia, Compass, Homes.com
 
-function parsePropertyUrl(url) {
-  if (!url) return null;
-
-  const match = url.match(/\/homedetails\/([^/]+)\/(\d+)_zpid/);
-  if (!match) return null;
-
-  const slug = match[1];
+// Shared parser for Zillow-style slugs: scan backward for zip (5 digits)
+// then state (2-letter code), convert hyphens to spaces for the address.
+function parseSlug(slug) {
   const parts = slug.split('-');
-  let state = null;
-  let zip = null;
-
+  let state = null, zip = null;
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i];
-    if (/^\d{5}$/.test(part) && !zip) {
-      zip = part;
-      continue;
+    if (/^\d{5}$/.test(part) && !zip)          { zip   = part; continue; }
+    if (/^[A-Z]{2}$/i.test(part) && !state)    { state = part.toUpperCase(); break; }
+  }
+  return { address: slug.replace(/-/g, ' '), state, zip };
+}
+
+const SITES = [
+  {
+    // Zillow: /homedetails/123-Main-St-City-CA-94102/12345_zpid
+    isProperty: (url) => /zillow\.com\/homedetails\/[^/]+\/\d+_zpid/.test(url),
+    isOnSite:   (url) => url.includes('zillow.com'),
+    parse(url) {
+      const m = url.match(/\/homedetails\/([^/]+)\/\d+_zpid/);
+      if (!m) return null;
+      const { address, state, zip } = parseSlug(m[1]);
+      return { address, state, zip, latitude: null, longitude: null };
     }
-    if (/^[A-Z]{2}$/i.test(part) && !state) {
-      state = part.toUpperCase();
-      break;
+  },
+  {
+    // Realtor.com: /realestateandhomes-detail/123-Main-St_City_CA_94102_M12345
+    isProperty: (url) => /realtor\.com\/realestateandhomes-detail\/[^/?#]+/.test(url),
+    isOnSite:   (url) => url.includes('realtor.com'),
+    parse(url) {
+      const m = url.match(/\/realestateandhomes-detail\/([^/?#]+)/);
+      if (!m) return null;
+      const parts = m[1].split('_');
+      if (parts.length < 4) return null;
+      // Format: street_city_STATE_ZIP_Mid
+      const zip    = parts[parts.length - 2];
+      const state  = parts[parts.length - 3].toUpperCase();
+      const city   = parts[parts.length - 4].replace(/-/g, ' ');
+      const street = parts.slice(0, parts.length - 4).join(' ').replace(/-/g, ' ');
+      return { address: `${street}, ${city}, ${state} ${zip}`, state, zip, latitude: null, longitude: null };
+    }
+  },
+  {
+    // Redfin: /CA/San-Francisco/123-Main-St-94102/home/12345678
+    isProperty: (url) => /redfin\.com\/[A-Z]{2}\/[^/]+\/[^/]+\/home\/\d+/.test(url),
+    isOnSite:   (url) => url.includes('redfin.com'),
+    parse(url) {
+      const m = url.match(/redfin\.com\/([A-Z]{2})\/([^/]+)\/([^/]+)\/home\/\d+/);
+      if (!m) return null;
+      const state = m[1];
+      const city  = m[2].replace(/-/g, ' ');
+      // Zip is the last 5-digit token in the street slug
+      const slugParts = m[3].split('-');
+      let zip = null, zipIdx = slugParts.length;
+      for (let i = slugParts.length - 1; i >= 0; i--) {
+        if (/^\d{5}$/.test(slugParts[i])) { zip = slugParts[i]; zipIdx = i; break; }
+      }
+      const street = slugParts.slice(0, zipIdx).join(' ');
+      return { address: `${street}, ${city}, ${state}${zip ? ' ' + zip : ''}`, state, zip, latitude: null, longitude: null };
+    }
+  },
+  {
+    // Trulia /p/: /p/ca/san-francisco/123-main-st-city-ca-94102--1234567890
+    // Trulia /building/: /building/building-name-123-main-st-city-ny-10001-1234567890
+    isProperty: (url) => /trulia\.com\/p\/[a-z]{2}\/[^/]+\/[^/?#]+--\d+/.test(url) ||
+                         /trulia\.com\/building\/[^/?#]+/.test(url),
+    isOnSite:   (url) => url.includes('trulia.com'),
+    parse(url) {
+      let m = url.match(/trulia\.com\/p\/([a-z]{2})\/[^/]+\/([^/?#]+)/);
+      if (m) {
+        const slug = m[2].replace(/--\d+$/, ''); // strip trailing --id
+        const { address, state, zip } = parseSlug(slug);
+        return { address, state: state || m[1].toUpperCase(), zip, latitude: null, longitude: null };
+      }
+      m = url.match(/trulia\.com\/building\/([^/?#]+)/);
+      if (m) {
+        const slug = m[1].replace(/-\d{7,}$/, ''); // strip trailing numeric id
+        const { address, state, zip } = parseSlug(slug);
+        return { address, state, zip, latitude: null, longitude: null };
+      }
+      return null;
+    }
+  },
+  {
+    // Compass: /homedetails/123-Main-St-City-NY-11215/12345_lid
+    isProperty: (url) => /compass\.com\/homedetails\/[^/]+\/[^/]+_lid/.test(url),
+    isOnSite:   (url) => url.includes('compass.com'),
+    parse(url) {
+      const m = url.match(/compass\.com\/homedetails\/([^/]+)\/[^/]+_lid/);
+      if (!m) return null;
+      const { address, state, zip } = parseSlug(m[1]);
+      return { address, state, zip, latitude: null, longitude: null };
+    }
+  },
+  {
+    // Homes.com: /property/123-main-st-city-ca/abc123def
+    isProperty: (url) => /homes\.com\/property\/[^/]+\/[a-z0-9]+/.test(url),
+    isOnSite:   (url) => url.includes('homes.com'),
+    parse(url) {
+      const m = url.match(/homes\.com\/property\/([^/]+)\/[^/]+/);
+      if (!m) return null;
+      const { address, state, zip } = parseSlug(m[1]);
+      return { address, state, zip, latitude: null, longitude: null };
     }
   }
+];
 
-  return {
-    address: slug.replace(/-/g, ' '),
-    slug: slug,
-    zpid: match[2],
-    state: state,
-    zip: zip,
-    latitude: null,
-    longitude: null
-  };
+function isSupportedSite(url) {
+  return url ? SITES.some(s => s.isOnSite(url)) : false;
 }
 
 function isPropertyUrl(url) {
-  return url ? /zillow\.com\/homedetails\/[^/]+\/\d+_zpid/.test(url) : false;
+  return url ? SITES.some(s => s.isProperty(url)) : false;
 }
 
+// On a supported site but not a property page (search results, homepage, etc.)
 function isSearchUrl(url) {
-  if (!url || !url.includes('zillow.com')) return false;
-  try {
-    const u = new URL(url);
-    return (
-      u.pathname.includes('/homes/') ||
-      u.pathname === '/ca/' ||
-      u.searchParams.has('searchQueryState')
-    );
-  } catch (e) {
-    return false;
+  if (!url) return false;
+  return SITES.some(s => s.isOnSite(url)) && !isPropertyUrl(url);
+}
+
+function parsePropertyUrl(url) {
+  if (!url) return null;
+  for (const site of SITES) {
+    if (site.isProperty(url)) return site.parse(url);
   }
+  return null;
 }
 
 // ─── Geocoding ──────────────────────────────────────────────────────────────
@@ -192,7 +268,7 @@ async function checkCurrentTab() {
 
   const url = tab.url;
 
-  if (!url.includes('zillow.com')) {
+  if (!isSupportedSite(url)) {
     showState('NOT_SUPPORTED', null);
     return;
   }
