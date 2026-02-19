@@ -76,18 +76,29 @@ const SITES = [
     }
   },
   {
-    // Trulia /p/: /p/ca/san-francisco/123-main-st-city-ca-94102--1234567890
+    // Trulia /p/:       /p/ca/san-francisco/123-main-st-city-ca-94102--1234567890
+    // Trulia /home/:    /home/811-w-grand-ave-oakland-ca-94607-24738456
     // Trulia /building/: /building/building-name-123-main-st-city-ny-10001-1234567890
     isProperty: (url) => /trulia\.com\/p\/[a-z]{2}\/[^/]+\/[^/?#]+--\d+/.test(url) ||
+                         /trulia\.com\/home\/[^/?#]+-\d+/.test(url)                 ||
                          /trulia\.com\/building\/[^/?#]+/.test(url),
     isOnSite:   (url) => url.includes('trulia.com'),
     parse(url) {
+      // /p/ format: /p/ca/city/address-slug--id
       let m = url.match(/trulia\.com\/p\/([a-z]{2})\/[^/]+\/([^/?#]+)/);
       if (m) {
         const slug = m[2].replace(/--\d+$/, ''); // strip trailing --id
         const { address, state, zip } = parseSlug(slug);
         return { address, state: state || m[1].toUpperCase(), zip, latitude: null, longitude: null };
       }
+      // /home/ format: /home/address-slug-numericid (6+ digit id at end)
+      m = url.match(/trulia\.com\/home\/([^/?#]+)/);
+      if (m) {
+        const slug = m[1].replace(/-\d{6,}$/, ''); // strip trailing numeric id
+        const { address, state, zip } = parseSlug(slug);
+        return { address, state, zip, latitude: null, longitude: null };
+      }
+      // /building/ format
       m = url.match(/trulia\.com\/building\/([^/?#]+)/);
       if (m) {
         const slug = m[1].replace(/-\d{7,}$/, ''); // strip trailing numeric id
@@ -98,11 +109,11 @@ const SITES = [
     }
   },
   {
-    // Compass: /homedetails/123-Main-St-City-NY-11215/12345_lid
-    isProperty: (url) => /compass\.com\/homedetails\/[^/]+\/[^/]+_lid/.test(url),
+    // Compass: /homedetails/123-Main-St-City-NY-11215/12345_lid  (or _pid, _uid, etc.)
+    isProperty: (url) => /compass\.com\/homedetails\/[^/]+\/[^/?#]+_\w+id/.test(url),
     isOnSite:   (url) => url.includes('compass.com'),
     parse(url) {
-      const m = url.match(/compass\.com\/homedetails\/([^/]+)\/[^/]+_lid/);
+      const m = url.match(/compass\.com\/homedetails\/([^/]+)\/[^/?#]+_\w+id/);
       if (!m) return null;
       const { address, state, zip } = parseSlug(m[1]);
       return { address, state, zip, latitude: null, longitude: null };

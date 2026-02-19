@@ -24,8 +24,9 @@ function isPropertyUrl(url) {
     /realtor\.com\/realestateandhomes-detail\/[^/?#]+/.test(url)    ||
     /redfin\.com\/[A-Z]{2}\/[^/]+\/[^/]+\/home\/\d+/.test(url)     ||
     /trulia\.com\/p\/[a-z]{2}\/[^/]+\/[^/?#]+--\d+/.test(url)      ||
+    /trulia\.com\/home\/[^/?#]+-\d+/.test(url)                      ||
     /trulia\.com\/building\/[^/?#]+/.test(url)                      ||
-    /compass\.com\/homedetails\/[^/]+\/[^/]+_lid/.test(url)         ||
+    /compass\.com\/homedetails\/[^/]+\/[^/?#]+_\w+id/.test(url)    ||
     /homes\.com\/property\/[^/]+\/[a-z0-9]+/.test(url)
   );
 }
