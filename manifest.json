@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Climate Risk - California",
   "version": "1.4.0",
-  "description": "Educational climate risk information for California real estate properties",
+  "description": "See wildfire, flood, heat & climate risks for California homes — on Zillow, Redfin, Realtor.com, Trulia & more.",
   "permissions": [
     "storage",
     "sidePanel",
@@ -39,7 +39,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Climate Risk"
+    "default_title": "Climate Risk - California"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

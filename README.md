@@ -38,7 +38,7 @@ The extension reads the property address directly from the browser URL bar — i
 
 ### From Chrome Web Store
 
-*Coming soon*
+Search for **"Climate Risk - California"** in the [Chrome Web Store](https://chrome.google.com/webstore/), or install directly from your published listing URL.
 
 ### From Source (Development)
 
@@ -148,16 +148,17 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 2. **More accurate heat days** — Query full daily data instead of statistical estimation
 3. **Landslide risk** — Integrate USGS data
 4. **Water stress indicators** — Add reservoir/groundwater projections
-5. **Additional real estate websites** — Expand supported sites
+5. **Additional state coverage** — Expand beyond California
 
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
-### v1.4.0
+### v1.4.0 (2025-02-20)
 - ✨ Expanded to Realtor.com, Redfin, Trulia, Compass, and Homes.com
 - 🔔 Extension icon badge indicates when a supported property page is active
 - 🔔 First-install notification prompts user to pin extension
+- 🐛 Fixed Trulia `/home/` and Compass `_pid` URL formats
 
 ### v1.3.0
 - 🏗️ Refactored to Chrome Side Panel — no modification of real estate websites
