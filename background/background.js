@@ -36,9 +36,9 @@ function isPropertyUrl(url) {
 function updateBadge(tab) {
   if (!tab || !tab.id || tab.id < 0) return;
   if (isPropertyUrl(tab.url)) {
-    chrome.action.setBadgeText({ text: '●', tabId: tab.id });
-    chrome.action.setBadgeBackgroundColor({ color: '#546e7a', tabId: tab.id });
-    chrome.action.setTitle({ title: 'Climate Risk — Click to view', tabId: tab.id });
+    chrome.action.setBadgeText({ text: '!', tabId: tab.id });
+    chrome.action.setBadgeBackgroundColor({ color: '#E65100', tabId: tab.id });
+    chrome.action.setTitle({ title: 'Climate Risk — Click to view property risks', tabId: tab.id });
   } else {
     chrome.action.setBadgeText({ text: '', tabId: tab.id });
     chrome.action.setTitle({ title: 'Climate Risk', tabId: tab.id });

@@ -21,6 +21,14 @@
     <div id="state-not-supported" class="state-message" hidden>
       <div class="state-icon">🏠</div>
       <p>Navigate to a property listing on a supported real estate website to see climate risk data.</p>
+      <ul class="supported-sites">
+        <li>Zillow</li>
+        <li>Redfin</li>
+        <li>Realtor.com</li>
+        <li>Trulia</li>
+        <li>Compass</li>
+        <li>Homes.com</li>
+      </ul>
     </div>
 
     <!-- State: on search results -->
@@ -49,6 +57,7 @@
       <div class="state-icon">⚠️</div>
       <p class="error-heading">Climate Risk: Temporarily Unavailable</p>
       <p id="error-detail" class="error-detail"></p>
+      <button id="retry-btn" class="retry-btn">Try Again</button>
     </div>
 
     <!-- State: results -->

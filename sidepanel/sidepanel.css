@@ -78,6 +78,28 @@ body {
   word-break: break-word;
 }
 
+.supported-sites {
+  list-style: none;
+  padding: 0;
+  margin: 12px auto 0;
+  display: inline-block;
+  text-align: left;
+}
+
+.supported-sites li {
+  padding: 3px 0 3px 20px;
+  position: relative;
+  font-size: 13px;
+  color: #374151;
+}
+
+.supported-sites li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: #9ca3af;
+}
+
 .error-heading {
   font-weight: 600;
   color: #991b1b;
@@ -87,6 +109,23 @@ body {
 .error-detail {
   font-size: 13px;
   color: #6b7280;
+}
+
+.retry-btn {
+  margin-top: 12px;
+  padding: 8px 20px;
+  background: #E65100;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.retry-btn:hover {
+  background: #BF360C;
 }
 
 /* ── Overall Risk Header ──────────────────────── */

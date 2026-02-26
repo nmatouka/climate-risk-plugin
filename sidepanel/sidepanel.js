@@ -495,8 +495,8 @@ function scheduleCheck() {
   pendingCheck = setTimeout(checkCurrentTab, 300);
 }
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.url || changeInfo.status === 'complete') {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if ((changeInfo.url || changeInfo.status === 'complete') && tab.active) {
     scheduleCheck();
   }
 });
@@ -508,5 +508,6 @@ chrome.tabs.onActivated.addListener(() => {
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('retry-btn').addEventListener('click', checkCurrentTab);
   checkCurrentTab();
 });
