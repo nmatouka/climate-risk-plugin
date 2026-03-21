@@ -1,4 +1,4 @@
-# Climate Risk - California (v1.4.0)
+# Climate Risk - California (v1.5.0)
 
 A free, open-source Chrome extension that displays educational climate risk information for California real estate properties, helping homebuyers make informed decisions about climate hazards. This is a proof of concept and should not be relied upon to make purchasing decisions.
 
@@ -6,16 +6,21 @@ A free, open-source Chrome extension that displays educational climate risk info
 
 ## Features
 
-### Climate Risk Indicators
+### Current Conditions
 
-* **🔥 Wildfire Risk** — Official CAL FIRE Fire Hazard Severity Zones (Minimal, Moderate, High, Very High)
-* **🌊 Flood Risk** — FEMA flood zone data from the National Flood Hazard Layer (NFHL)
-* **☀️ Extreme Heat** — Cal-Adapt projections of mid-century average maximum temperatures
-* **🔆 Extreme Heat Days** — Estimated annual days above 100°F by mid-century
-* **🌧️ Extreme Precipitation** — Projected average annual rainfall by mid-century
-* **📈 Sea Level Rise** — Coastal vulnerability assessment with links to authoritative resources
+* **🔥 Wildfire** — Official CAL FIRE Fire Hazard Severity Zones, queried across both State (SRA) and Local (LRA) Responsibility Areas
+* **🌊 Flood** — FEMA National Flood Hazard Layer (NFHL), live point query including SFHA designation
 
-All forward-looking metrics show **mid-century projections (2050–2060)** under the RCP 8.5 emissions scenario.
+### Mid-Century Projections (2050–2060, RCP 8.5)
+
+* **🔥 Wildfire Probability** — Cal-Adapt / UC Merced decadal wildfire occurrence probability
+* **🌊 Projected Flood** — FEMA Future Conditions Flood Hazard data (FC-FIRM), extracted from the same NFHL response
+* **☀️ Extreme Heat** — Cal-Adapt projected average annual peak temperature
+* **🔆 Extreme Heat Days** — Cal-Adapt projected days above 95°F per year, counted directly from daily model output
+* **🌧️ Extreme Precipitation** — Cal-Adapt projected average annual total precipitation
+* **📈 Sea Level Rise** — Coastal proximity detection with NOAA 2022 sea level rise projections
+
+The side panel groups risks into **Current Conditions** and **Mid-Century Projections** sections, each with an aggregate risk level badge, plus a headline **Now → 2050** summary showing whether projected risk is higher or lower than current conditions.
 
 ### Supported Real Estate Websites
 
@@ -30,7 +35,7 @@ All forward-looking metrics show **mid-century projections (2050–2060)** under
 
 The extension reads the property address directly from the browser URL bar — it does not modify or scrape any real estate website. Climate risk data is displayed in a **Chrome Side Panel** that sits alongside the page without interfering with it.
 
-* When you navigate to a supported property listing, the extension icon shows a badge dot (●)
+* When you navigate to a supported property listing, the extension icon shows a badge (!)
 * Click the icon to open the Climate Risk side panel
 * The panel loads automatically and updates as you navigate between listings
 
@@ -62,9 +67,9 @@ Search for **"Climate Risk - California"** in the [Chrome Web Store](https://chr
 ## Usage
 
 1. Navigate to an individual property listing on a supported real estate website
-2. The extension icon shows a badge dot (●) when you're on a supported property page
+2. The extension icon shows a badge (!) when you're on a supported property page
 3. Click the icon to open the Climate Risk side panel
-4. The panel displays all 6 risk indicators with details and source links
+4. The panel displays 8 risk indicators grouped into Current Conditions and Mid-Century Projections sections
 5. The panel updates automatically as you navigate to other property listings
 
 **Note:** The extension only processes California properties. Non-CA properties will show an informational message.
@@ -77,12 +82,14 @@ All climate risk information comes from authoritative public sources:
 
 | Risk Type | Data Source | Timeframe |
 |---|---|---|
-| Wildfire | [CAL FIRE FHSZ](https://osfm.fire.ca.gov/) | Current |
-| Flood | [FEMA NFHL](https://hazards.fema.gov/femaportal/NFHL/) | Current |
+| Wildfire | [CAL FIRE FHSZ](https://osfm.fire.ca.gov/) (SRA + LRA layers) | Current |
+| Flood | [FEMA NFHL](https://hazards.fema.gov/) Layer 28 | Current |
+| Wildfire Probability | [Cal-Adapt / UC Merced](https://cal-adapt.org/) | 2050s decade |
+| Projected Flood | [FEMA FC-FIRM](https://hazards.fema.gov/) (NFHL ZONE_SUBTY) | Future conditions |
 | Extreme Heat | [Cal-Adapt](https://cal-adapt.org/) | 2050–2060 |
 | Extreme Heat Days | [Cal-Adapt](https://cal-adapt.org/) | 2050–2060 |
 | Extreme Precipitation | [Cal-Adapt](https://cal-adapt.org/) | 2050–2060 |
-| Sea Level Rise | [CA Coastal Commission](https://www.coastal.ca.gov/climate/slr/) / [NOAA](https://coast.noaa.gov/slr/) | Varies |
+| Sea Level Rise | [NOAA](https://coast.noaa.gov/slr/) / [CA Coastal Commission](https://www.coastal.ca.gov/climate/slr/) | 2050 / 2100 |
 
 ### About Cal-Adapt Data
 
@@ -94,10 +101,7 @@ The Cal-Adapt platform provides downscaled climate projections from global clima
 
 ### About Flood Data
 
-The flood risk data is derived from FEMA's National Flood Hazard Layer (NFHL) and has been:
-- Downloaded for all California counties
-- Processed and simplified for web use (~79MB → ~13MB)
-- Hosted on GitHub Pages and loaded once per browser session
+Flood data is queried live from FEMA's National Flood Hazard Layer (NFHL) REST API (Layer 28). A single point query returns both the current flood zone (`FLD_ZONE`, `SFHA_TF`) and any Future Conditions designations (`ZONE_SUBTY` containing "FUTURE"), enabling both the Flood and Projected Flood cards from one network request. FEMA's service can return multiple overlapping polygons for a point — the extension selects the highest-risk feature.
 
 ## Technical Details
 
@@ -107,32 +111,46 @@ The flood risk data is derived from FEMA's National Flood Hazard Layer (NFHL) an
 * **URL-based address detection** — Property addresses are read from the browser URL bar, not from page content
 * **Client-side only** — No backend server required
 * **Smart caching** — Results stored for 30 days to minimize API calls
-* **Parallel API calls** — All 6 risk types fetched simultaneously
+* **Parallel API calls** — All 8 risk indicators fetched simultaneously (flood current + projected share one request)
 * **Geocoding** — Addresses geocoded via OpenStreetMap Nominatim to obtain coordinates
+* **Current vs. projected layout** — Risks grouped into two sections with aggregate badges and a Now → 2050 headline summary
 
 ### Performance
 
-* **Initial load:** 5–15 seconds (includes flood data + Cal-Adapt queries)
+* **Initial load:** 10–30 seconds (Cal-Adapt daily heat days query is the slowest — ~3,650 data points)
 * **Subsequent loads:** < 2 seconds (all data cached)
 * **Cache duration:** 30 days
 
 ### Risk Classification Details
 
-**Extreme Precipitation**
-- < 20 in/year: Minimal
-- 20–30 in/year: Low
-- 30–40 in/year: Moderate
-- 40–50 in/year: High
-- 50+ in/year: Severe
+**Wildfire Probability** (10-year occurrence probability, 2050s decade)
+- < 3%: Minimal
+- 3–6.9%: Low
+- 7–14.9%: Moderate
+- 15–24.9%: High
+- ≥ 25%: Severe
 
-**Extreme Heat Days** (estimated days above 100°F)
+**Projected Flood** (FEMA FC-FIRM future conditions)
+- 1%-annual-chance future zone: High
+- 0.2%-annual-chance future zone: Moderate
+- Other future designation: Low
+- Not mapped: Unavailable (FC-FIRM coverage is expanding)
+
+**Extreme Heat Days** (days above 95°F, counted directly from Cal-Adapt daily data)
 - < 10 days/year: Minimal
-- 10–30 days/year: Low
-- 30–60 days/year: Moderate
-- 60–90 days/year: High
-- 90+ days/year: Severe
+- 10–29 days/year: Low
+- 30–59 days/year: Moderate
+- 60–89 days/year: High
+- ≥ 90 days/year: Severe
 
-**Sea Level Rise** — Detects coastal properties (within ~10 miles of coast) and links to NOAA's Sea Level Rise Viewer for property-specific inundation analysis. California projects 10–12 inches of rise by 2050.
+**Extreme Precipitation** (projected annual total)
+- < 10 in/year: Minimal
+- 10–19 in/year: Low
+- 20–34 in/year: Moderate
+- 35–49 in/year: High
+- ≥ 50 in/year: Severe
+
+**Sea Level Rise** — Detects coastal properties (within ~10 miles of coast) using seven validated regional bounding boxes. Reports NOAA 2022 projections: 0.6–1.5 ft by 2050 (intermediate), up to 3.5 ft by 2100 (high scenario).
 
 ## Privacy
 
@@ -153,6 +171,16 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
+
+### v1.5.0 (2026-03-20)
+- ✨ Added Wildfire Probability (Cal-Adapt / UC Merced 2050s decadal probability)
+- ✨ Added Projected Flood via FEMA FC-FIRM future conditions (from same NFHL request)
+- ✨ Replaced local flood GeoJSON with live FEMA NFHL REST API
+- ✨ Dual-layer wildfire query (SRA + LRA) for complete CAL FIRE FHSZ coverage
+- ✨ Current vs. Projected layout with aggregate risk badges per section
+- ✨ Now → 2050 headline summary row showing whether projected risk is higher or lower
+- 🔧 Fixed Extreme Heat Days to use actual Cal-Adapt daily data (95°F threshold)
+- 🔧 Fixed Extreme Precipitation unit conversion and recalibrated thresholds
 
 ### v1.4.0 (2025-02-20)
 - ✨ Expanded to Realtor.com, Redfin, Trulia, Compass, and Homes.com

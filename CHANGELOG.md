@@ -8,15 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- More accurate extreme heat days calculation (query daily data)
 - Drought and air quality risk metrics (pending Cal-Adapt API availability)
 - Water scarcity/supply risk indicators
 - Landslide risk integration with USGS data
 - Additional state coverage beyond California
 - Property comparison feature
 - Export risk reports as PDF
-- Regional flood data splitting for faster initial loads
 - Firefox browser support
+
+---
+
+## [1.5.0] - 2026-03-20
+
+### Added
+- **Wildfire Probability** — Mid-century (2050s decade) wildfire occurrence probability from Cal-Adapt / UC Merced (`fireprob_10y_HadGEM2-ES_rcp85_bau`), classified Minimal → Severe
+- **Projected Flood (FC-FIRM)** — FEMA Future Conditions flood hazard extracted from the same NFHL API response via `ZONE_SUBTY` field; no additional network request
+- **Current vs. Projected layout** — Risk cards grouped into "Current Conditions" (wildfire FHSZ + flood NFHL) and "Mid-Century Projections" (6 projected indicators) sections, each with an aggregate risk level badge
+- **Now → 2050 headline summary** — Top-of-results row showing aggregate current level, aggregate projected level, and a directional trend indicator (↑ higher / ↓ lower risk)
+- **Dual-layer CAL FIRE query** — Wildfire risk now queries both SRA (layer 0) and LRA (layer 1) in parallel and takes the highest result, closing a gap where local-responsibility-area properties returned no data
+
+### Fixed
+- **Extreme Heat Days** — Replaced estimation formula with actual Cal-Adapt daily data query (`imperial=True`, no `freq`/`stat` params); counts days > 95°F directly and divides by unique years in the index; threshold updated from 100°F to 95°F
+- **Extreme Precipitation** — Corrected unit conversion from kg/m²/s to annual inches (`× 86400 × 365 / 25.4`); recalibrated thresholds to match validated ClimateShed methodology
+
+### Changed
+- **Flood data source** — Replaced ~13MB local GeoJSON (hosted on GitHub Pages) with live FEMA NFHL REST API (Layer 28); single point query returns both current zone and FC-FIRM future conditions
+- Removed `nmatouka.github.io` host permission; added `hazards.fema.gov` host permission in its place
+- FC-FIRM "Not mapped" cards now display an explanatory detail string so users understand the absence of data reflects incomplete coverage, not absence of risk
+
+### Technical
+- `dataFetcher.js` v3.0 — `fetchFloodRisks()` returns `{current, projected}`; `fetchWildfireProjection()` new; `fetchExtremeHeatDays()` rewired to daily Cal-Adapt endpoint
+- `sidepanel.js` — `aggregateLevel()` replaces `calculateOverallRisk()`; `renderSummaryRow()`, `renderSectionHeader()`, `renderRiskCards()` new layout functions
+- `sidepanel.html` — new IDs: `risk-summary-row`, `current-section-header`, `current-risk-container`, `projected-section-header`, `projected-risk-container`
 
 ---
 
@@ -130,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Summary |
 |---------|------|---------|
+| **1.5.0** | 2026-03-20 | 8 indicators, Current/Projected layout, live FEMA API, fixed heat days |
 | **1.4.0** | 2025-02-20 | Multi-site support (6 sites), badge indicator, pin prompt |
 | **1.3.0** | 2025-01 | Chrome Side Panel refactor, no DOM modification |
 | **1.2.0** | 2025-01 | Extreme Precipitation + Extreme Heat Days |
@@ -153,7 +177,8 @@ No security issues reported.
 
 ---
 
-[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.0
 [1.4.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.4.0
 [1.3.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.3.0
 [1.2.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.2.0

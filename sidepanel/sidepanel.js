@@ -365,26 +365,17 @@ function clearEl(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
-// ─── Risk Calculation ───────────────────────────────────────────────────────
+// ─── Risk Aggregation ───────────────────────────────────────────────────────
 
-function calculateOverallRisk(riskData) {
-  const risks = [
-    riskData.wildfire?.level || 0,
-    riskData.flood?.level || 0,
-    riskData.seaLevelRise?.level || 0,
-    riskData.heat?.level || 0,
-    riskData.extremePrecipitation?.level || 0,
-    riskData.extremeHeatDays?.level || 0
-  ];
+const LEVEL_NAMES  = ['minimal', 'low', 'moderate', 'high', 'severe'];
+const LEVEL_LABELS = ['Minimal', 'Low', 'Moderate', 'High', 'Severe'];
 
-  const maxRisk = Math.max(...risks);
-  const labels = ['Minimal', 'Low', 'Moderate', 'High', 'Severe'];
-  const levels = ['minimal', 'low', 'moderate', 'high', 'severe'];
-
-  return {
-    level: levels[maxRisk] || 'minimal',
-    label: labels[maxRisk] || 'Minimal'
-  };
+// Returns the highest level (0–4) across available risk items, or null if none available.
+function aggregateLevel(riskItems) {
+  const levels = riskItems
+    .filter(r => r && r.available)
+    .map(r => r.level);
+  return levels.length > 0 ? Math.max(...levels) : null;
 }
 
 // ─── Results Rendering ──────────────────────────────────────────────────────
@@ -395,18 +386,25 @@ function renderResults(propertyData, riskData) {
   clearEl(addrEl);
   addrEl.textContent = propertyData.address;
 
-  // Overall risk header
-  const overallRisk = calculateOverallRisk(riskData);
-  const headerEl = document.getElementById('overall-risk-header');
-  clearEl(headerEl);
-  headerEl.className = `climate-risk-header climate-risk-${overallRisk.level}`;
-  headerEl.appendChild(createEl('span', 'climate-risk-icon', '🌡️'));
-  headerEl.appendChild(
-    createEl('span', 'climate-risk-title', `Climate Risk: ${overallRisk.label}`)
-  );
+  // Aggregate levels — mirrors Climateshed's currentAggregateLevel / projectedAggregateLevel
+  const currentLevel = aggregateLevel([riskData.wildfire, riskData.flood]);
+  const projectedLevel = aggregateLevel([
+    riskData.wildfireProjection, riskData.floodProjection,
+    riskData.heat, riskData.extremeHeatDays,
+    riskData.extremePrecipitation, riskData.seaLevelRise
+  ]);
 
-  // Risk items
-  const risks = [
+  // Now → 2050 summary row
+  renderSummaryRow(document.getElementById('risk-summary-row'), currentLevel, projectedLevel);
+
+  // Current Conditions section
+  renderSectionHeader(
+    document.getElementById('current-section-header'),
+    'Current Conditions',
+    'Based on current regulatory designations',
+    currentLevel
+  );
+  renderRiskCards(document.getElementById('current-risk-container'), [
     {
       name: 'Wildfire', icon: '🔥', data: riskData.wildfire,
       source: 'CAL FIRE',
@@ -414,7 +412,27 @@ function renderResults(propertyData, riskData) {
     },
     {
       name: 'Flood', icon: '🌊', data: riskData.flood,
-      source: 'FEMA',
+      source: 'FEMA NFHL',
+      url: 'https://msc.fema.gov/portal/home'
+    }
+  ]);
+
+  // Mid-Century Projections section
+  renderSectionHeader(
+    document.getElementById('projected-section-header'),
+    'Mid-Century Projections',
+    'Climate model estimates for 2050–2060 (RCP 8.5)',
+    projectedLevel
+  );
+  renderRiskCards(document.getElementById('projected-risk-container'), [
+    {
+      name: 'Wildfire Probability', icon: '🔥', data: riskData.wildfireProjection,
+      source: 'Cal-Adapt (UC Merced)',
+      url: 'https://cal-adapt.org/'
+    },
+    {
+      name: 'Projected Flood', icon: '🌊', data: riskData.floodProjection,
+      source: 'FEMA FC-FIRM',
       url: 'https://msc.fema.gov/portal/home'
     },
     {
@@ -434,15 +452,59 @@ function renderResults(propertyData, riskData) {
     },
     {
       name: 'Sea Level Rise', icon: '📈', data: riskData.seaLevelRise,
-      source: 'CA Coastal Commission',
+      source: 'NOAA / CA Coastal Commission',
       url: 'https://www.coastal.ca.gov/climate/slr/'
     }
-  ];
+  ]);
 
-  const container = document.getElementById('risk-container');
+  // Disclaimer
+  const disc = document.getElementById('disclaimer');
+  clearEl(disc);
+  disc.appendChild(createEl('strong', null, 'Disclaimer:'));
+  disc.appendChild(document.createTextNode(
+    ' This information is for educational purposes only. ' +
+    'Climate risk data is sourced from Cal-Adapt, CAL FIRE, FEMA, and NOAA. ' +
+    'Mid-century projections (2050–2060) shown for forward-looking risks. ' +
+    'Consult with professionals and review official hazard maps before making real estate decisions.'
+  ));
+}
+
+function renderSummaryRow(el, currentLevel, projectedLevel) {
+  clearEl(el);
+  if (currentLevel === null) return;
+
+  el.appendChild(createEl('span', 'summary-label', 'Now:'));
+  el.appendChild(createEl('span', `risk-level risk-level-${LEVEL_NAMES[currentLevel]}`, LEVEL_LABELS[currentLevel]));
+
+  if (projectedLevel !== null) {
+    el.appendChild(createEl('span', 'summary-arrow', '→'));
+    el.appendChild(createEl('span', 'summary-label', '2050:'));
+    el.appendChild(createEl('span', `risk-level risk-level-${LEVEL_NAMES[projectedLevel]}`, LEVEL_LABELS[projectedLevel]));
+
+    if (projectedLevel > currentLevel) {
+      el.appendChild(createEl('span', 'summary-trend summary-trend-up', '↑'));
+    } else if (projectedLevel < currentLevel) {
+      el.appendChild(createEl('span', 'summary-trend summary-trend-down', '↓'));
+    }
+  }
+}
+
+function renderSectionHeader(el, title, subtitle, level) {
+  clearEl(el);
+  const textDiv = createEl('div', 'section-header-text');
+  textDiv.appendChild(createEl('div', 'section-title', title));
+  textDiv.appendChild(createEl('div', 'section-subtitle', subtitle));
+  el.appendChild(textDiv);
+
+  if (level !== null) {
+    el.appendChild(
+      createEl('span', `risk-level risk-level-${LEVEL_NAMES[level]}`, LEVEL_LABELS[level])
+    );
+  }
+}
+
+function renderRiskCards(container, risks) {
   clearEl(container);
-
-  const levelNames = ['minimal', 'low', 'moderate', 'high', 'severe'];
 
   risks.forEach(risk => {
     const item = createEl('div', 'climate-risk-item');
@@ -452,37 +514,27 @@ function renderResults(propertyData, riskData) {
     itemHeader.appendChild(createEl('span', 'risk-name', risk.name));
 
     if (risk.data && risk.data.available) {
-      const levelClass = levelNames[risk.data.level] || 'unknown';
+      const levelClass = LEVEL_NAMES[risk.data.level] || 'unknown';
       itemHeader.appendChild(
         createEl('span', `risk-level risk-level-${levelClass}`, risk.data.description)
       );
       item.appendChild(itemHeader);
-
       if (risk.data.details) {
         item.appendChild(createEl('div', 'risk-details', risk.data.details));
       }
-
       item.appendChild(createExternalLink(risk.url, `Source: ${risk.source}`, 'risk-source'));
     } else {
-      itemHeader.appendChild(
-        createEl('span', 'risk-level risk-level-unknown', 'Data unavailable')
-      );
+      // Show unavailable badge; still show details if present (e.g. FC-FIRM "Not mapped" explanation)
+      const label = (risk.data && risk.data.description) ? risk.data.description : 'Data unavailable';
+      itemHeader.appendChild(createEl('span', 'risk-level risk-level-unknown', label));
       item.appendChild(itemHeader);
+      if (risk.data && risk.data.details) {
+        item.appendChild(createEl('div', 'risk-details', risk.data.details));
+      }
     }
 
     container.appendChild(item);
   });
-
-  // Disclaimer
-  const disc = document.getElementById('disclaimer');
-  clearEl(disc);
-  disc.appendChild(createEl('strong', null, 'Disclaimer:'));
-  disc.appendChild(document.createTextNode(
-    ' This information is for educational purposes only. ' +
-    'Climate risk data is sourced from Cal-Adapt, CAL FIRE, FEMA, and California Coastal Commission. ' +
-    'Mid-century projections (2050–2060) shown for forward-looking risks. ' +
-    'Consult with professionals and review official hazard maps before making real estate decisions.'
-  ));
 }
 
 // ─── Tab Navigation Listeners ────────────────────────────────────────────────

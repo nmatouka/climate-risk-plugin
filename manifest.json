@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Climate Risk - California",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "See wildfire, flood, heat & climate risks for California homes — on Zillow, Redfin, Realtor.com, Trulia & more.",
   "permissions": [
     "storage",
@@ -19,8 +19,8 @@
     "*://www.homes.com/*",
     "https://api.cal-adapt.org/*",
     "https://services.gis.ca.gov/*",
-    "https://nominatim.openstreetmap.org/*",
-    "https://nmatouka.github.io/*"
+    "https://hazards.fema.gov/*",
+    "https://nominatim.openstreetmap.org/*"
   ],
   "background": {
     "service_worker": "background/background.js"

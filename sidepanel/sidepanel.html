@@ -63,8 +63,18 @@
     <!-- State: results -->
     <div id="state-results" hidden>
       <p id="property-address" class="address-display"></p>
-      <div id="overall-risk-header" class="climate-risk-header"></div>
-      <div id="risk-container" class="climate-risk-list"></div>
+      <div id="risk-summary-row" class="risk-summary-row"></div>
+
+      <div class="risk-section">
+        <div id="current-section-header" class="section-header"></div>
+        <div id="current-risk-container" class="climate-risk-list"></div>
+      </div>
+
+      <div class="risk-section">
+        <div id="projected-section-header" class="section-header"></div>
+        <div id="projected-risk-container" class="climate-risk-list"></div>
+      </div>
+
       <div id="disclaimer" class="climate-risk-disclaimer"></div>
     </div>
 
@@ -75,20 +85,19 @@
     <div class="about-content">
       <p>This extension displays climate risk information for California properties, including:</p>
       <ul>
-        <li>Wildfire risk</li>
-        <li>Flood zones</li>
-        <li>Sea level rise</li>
-        <li>Extreme heat</li>
-        <li>Extreme heat days</li>
+        <li>Wildfire risk &amp; mid-century probability</li>
+        <li>Flood zones &amp; future conditions (FC-FIRM)</li>
+        <li>Extreme heat &amp; extreme heat days</li>
         <li>Extreme precipitation</li>
+        <li>Sea level rise</li>
       </ul>
 
       <h3>Data Sources</h3>
       <ul class="source-list">
         <li><a href="https://osfm.fire.ca.gov/" target="_blank" rel="noopener noreferrer">CAL FIRE</a></li>
-        <li><a href="https://msc.fema.gov/" target="_blank" rel="noopener noreferrer">FEMA</a></li>
+        <li><a href="https://msc.fema.gov/" target="_blank" rel="noopener noreferrer">FEMA NFHL &amp; FC-FIRM</a></li>
+        <li><a href="https://cal-adapt.org/" target="_blank" rel="noopener noreferrer">Cal-Adapt (UC Berkeley / UC Merced)</a></li>
         <li><a href="https://www.coastal.ca.gov/" target="_blank" rel="noopener noreferrer">CA Coastal Commission</a></li>
-        <li><a href="https://cal-adapt.org/" target="_blank" rel="noopener noreferrer">Cal-Adapt</a></li>
       </ul>
 
       <h3>Privacy</h3>

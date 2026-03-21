@@ -128,38 +128,70 @@ body {
   background: #BF360C;
 }
 
-/* ── Overall Risk Header ──────────────────────── */
+/* ── Risk Summary Row (Now → 2050) ────────────── */
 
-.climate-risk-header {
+.risk-summary-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  margin-bottom: 14px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  gap: 6px;
+  padding: 4px 0 14px;
+  flex-wrap: wrap;
 }
 
-.climate-risk-icon {
-  font-size: 28px;
-  line-height: 1;
+.summary-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
 }
 
-.climate-risk-title {
-  font-size: 18px;
+.summary-arrow {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0 2px;
+}
+
+.summary-trend {
+  font-size: 13px;
   font-weight: 700;
-  color: #111827;
-  letter-spacing: -0.01em;
+  margin-left: 2px;
 }
 
-/* Risk level tints for overall header */
-.climate-risk-minimal { background: rgba(209, 250, 229, 0.6); border-color: rgba(16, 185, 129, 0.2); }
-.climate-risk-low     { background: rgba(219, 234, 254, 0.6); border-color: rgba(59, 130, 246, 0.2); }
-.climate-risk-moderate{ background: rgba(254, 243, 199, 0.6); border-color: rgba(245, 158, 11, 0.2); }
-.climate-risk-high    { background: rgba(254, 226, 226, 0.6); border-color: rgba(239, 68, 68, 0.2); }
-.climate-risk-severe  { background: rgba(254, 202, 202, 0.8); border-color: rgba(153, 27, 27, 0.3); }
+.summary-trend-up   { color: #991b1b; }
+.summary-trend-down { color: #065f46; }
+
+/* ── Section Headers ──────────────────────────── */
+
+.risk-section {
+  margin-bottom: 8px;
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 10px;
+}
+
+.section-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 2px;
+}
+
+.section-subtitle {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
 
 /* ── Risk List ────────────────────────────────── */
 
