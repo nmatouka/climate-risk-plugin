@@ -178,7 +178,8 @@ async function geocodeAddress(propertyData) {
       };
     }
 
-    // Fallback: geocode by city + state + zip if full address fails
+    // Fallback: geocode by city + state + zip if full address fails.
+    // Returns a ZIP centroid — accuracy may be low for large rural ZIP codes.
     if (propertyData.zip && propertyData.state) {
       const fallbackQuery = encodeURIComponent(
         `${propertyData.zip}, ${propertyData.state}`
@@ -194,7 +195,8 @@ async function geocodeAddress(propertyData) {
         if (fallbackData && fallbackData.length > 0) {
           return {
             latitude: parseFloat(fallbackData[0].lat),
-            longitude: parseFloat(fallbackData[0].lon)
+            longitude: parseFloat(fallbackData[0].lon),
+            isZipFallback: true
           };
         }
       }
@@ -329,6 +331,7 @@ async function processProperty(propertyData) {
 
   propertyData.latitude = coords.latitude;
   propertyData.longitude = coords.longitude;
+  propertyData.isZipFallback = coords.isZipFallback || false;
 
   let riskData;
   try {
@@ -386,6 +389,17 @@ function renderResults(propertyData, riskData) {
   clearEl(addrEl);
   addrEl.textContent = propertyData.address;
 
+  // ZIP fallback warning — shown when full address geocoding failed
+  const geocodeWarning = document.getElementById('geocode-warning');
+  if (geocodeWarning) {
+    if (propertyData.isZipFallback) {
+      geocodeWarning.textContent = 'Note: exact address could not be geocoded — results are based on the ZIP code centroid and may not reflect the specific property location.';
+      geocodeWarning.hidden = false;
+    } else {
+      geocodeWarning.hidden = true;
+    }
+  }
+
   // Aggregate levels — mirrors Climateshed's currentAggregateLevel / projectedAggregateLevel
   const currentLevel = aggregateLevel([riskData.wildfire, riskData.flood]);
   const projectedLevel = aggregateLevel([
@@ -421,7 +435,7 @@ function renderResults(propertyData, riskData) {
   renderSectionHeader(
     document.getElementById('projected-section-header'),
     'Mid-Century Projections',
-    'Climate model estimates for 2050–2060 (RCP 8.5)',
+    'Climate model estimates for 2050–2060 (HadGEM2-ES, RCP 8.5 high-emissions). Results from other models or scenarios may differ.',
     projectedLevel
   );
   renderRiskCards(document.getElementById('projected-risk-container'), [

@@ -1,4 +1,4 @@
-# Climate Risk - California (v1.5.0)
+# Climate Risk - California (v1.5.1)
 
 A free, open-source Chrome extension that displays educational climate risk information for California real estate properties, helping homebuyers make informed decisions about climate hazards. This is a proof of concept and should not be relied upon to make purchasing decisions.
 
@@ -181,6 +181,14 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - ✨ Now → 2050 headline summary row showing whether projected risk is higher or lower
 - 🔧 Fixed Extreme Heat Days to use actual Cal-Adapt daily data (95°F threshold)
 - 🔧 Fixed Extreme Precipitation unit conversion and recalibrated thresholds
+
+### v1.5.1 (2026-04-01)
+- 🐛 Fixed flood zone 0.2% (500-year) classification — Moderate level was never shown due to wrong field check
+- 🌊 Sea level rise now fetches property elevation (USGS 3DEP); low-elevation properties show inundation severity; elevated properties show cliff/bluff erosion caveat
+- 🌧️ Extreme Precipitation now counts days exceeding the local historical 95th percentile wet-day threshold (Cal-Adapt 1981–2010 baseline), not total annual rainfall
+- ⚠️ FC-FIRM projected flood description now clarifies it reflects land-use changes, not climate projections
+- 📊 Mid-Century Projections section now discloses model (HadGEM2-ES) and scenario (RCP 8.5)
+- 🗺️ ZIP-centroid geocoding fallback now shows a visible accuracy warning in results
 
 ### v1.4.0 (2025-02-20)
 - ✨ Expanded to Realtor.com, Redfin, Trulia, Compass, and Homes.com

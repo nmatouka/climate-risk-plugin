@@ -26,10 +26,13 @@ const CLIMATE_CONSTANTS = {
   FEMA_NFHL_URL: 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query',
 
   SLUGS: {
-    TASMAX:    'tasmax_day_HadGEM2-ES_rcp85',       // Daily max temperature
-    PRECIP:    'pr_day_HadGEM2-ES_rcp85',           // Daily precipitation rate
-    FIRE_PROB: 'fireprob_10y_HadGEM2-ES_rcp85_bau'  // Decadal wildfire probability (UC Merced)
+    TASMAX:          'tasmax_day_HadGEM2-ES_rcp85',           // Daily max temperature
+    PRECIP:          'pr_day_HadGEM2-ES_rcp85',               // Daily precipitation rate (future)
+    PRECIP_HIST:     'pr_day_HadGEM2-ES_historical',          // Daily precipitation rate (historical baseline)
+    FIRE_PROB:       'fireprob_10y_HadGEM2-ES_rcp85_bau'      // Decadal wildfire probability (UC Merced)
   },
+
+  HISTORICAL: { start: '1981-01-01', end: '2010-12-31' },
 
   MID_CENTURY: { start: '2050-01-01', end: '2060-12-31' }
 };
@@ -334,9 +337,11 @@ const ClimateDataFetcher = {
 
   floodRank(attrs) {
     if (attrs.FLD_ZONE && attrs.FLD_ZONE.startsWith('V')) return 4;
-    if (attrs.SFHA_TF === 'T')                             return 3;
-    if (attrs.FLD_ZONE && attrs.FLD_ZONE.includes('0.2')) return 2;
-    if (attrs.FLD_ZONE)                                    return 1;
+    if (attrs.SFHA_TF === 'T')                            return 3;
+    // Zone X shaded (0.2% annual chance) has FLD_ZONE='X' and ZONE_SUBTY containing '0.2 PCT'.
+    // FLD_ZONE itself never contains '0.2' — checking it was a dead code path.
+    if (attrs.ZONE_SUBTY && attrs.ZONE_SUBTY.toUpperCase().includes('0.2 PCT')) return 2;
+    if (attrs.FLD_ZONE)                                   return 1;
     return 0;
   },
 
@@ -365,10 +370,10 @@ const ClimateDataFetcher = {
         details: `Property is in FEMA Flood Zone ${best.FLD_ZONE || 'SFHA'}, a Special Flood Hazard Area with 1% annual chance of flooding — roughly 26% cumulative probability over a 30-year mortgage. Flood insurance is required for federally backed mortgages.`,
         isInFloodZone: true, rawData: { floodZone: best.FLD_ZONE }
       };
-    } else if (best.FLD_ZONE && best.FLD_ZONE.includes('0.2')) {
+    } else if (best.ZONE_SUBTY && best.ZONE_SUBTY.toUpperCase().includes('0.2 PCT')) {
       return {
         available: true, level: 2, description: 'Moderate',
-        details: `Property is in FEMA Flood Zone ${best.FLD_ZONE}, a moderate-risk area (0.2% annual chance of flooding). Flood insurance is recommended but not federally required.`,
+        details: `Property is in FEMA Flood Zone ${best.FLD_ZONE || 'X'} (0.2% annual chance — 500-year flood zone). Moderate flood risk — flood insurance is recommended but not federally required for federally backed mortgages.`,
         isInFloodZone: true, rawData: { floodZone: best.FLD_ZONE }
       };
     } else if (best.FLD_ZONE) {
@@ -415,19 +420,19 @@ const ClimateDataFetcher = {
     if (rank === 2) {
       return {
         available: true, level: 3, description: 'High',
-        details: "FEMA projects this location will fall within the 1%-annual-chance floodplain under future conditions (FC-FIRM). This is not the current regulatory designation — it reflects anticipated changes in land use and hydrology. Check the Flood card for the current designation.",
+        details: "FEMA projects this location will fall within the 1%-annual-chance floodplain under future conditions (FC-FIRM). Important: FC-FIRM reflects anticipated changes in land use and hydrology (e.g., upstream development and altered drainage) — not specifically climate change projections. Check the Flood card for the current regulatory designation.",
         rawData: { zoneSubtype: best.ZONE_SUBTY }
       };
     } else if (rank === 1) {
       return {
         available: true, level: 2, description: 'Moderate',
-        details: "FEMA projects this location will fall within the 0.2%-annual-chance floodplain under future conditions (FC-FIRM). This reflects anticipated changes in land use and hydrology. The current regulatory designation may differ — check the Flood card.",
+        details: "FEMA projects this location will fall within the 0.2%-annual-chance floodplain under future conditions (FC-FIRM). Important: FC-FIRM reflects anticipated changes in land use and hydrology — not specifically climate change projections. The current regulatory designation may differ — check the Flood card.",
         rawData: { zoneSubtype: best.ZONE_SUBTY }
       };
     } else {
       return {
         available: true, level: 1, description: 'Low',
-        details: `FEMA has mapped a future conditions flood designation at this location (${best.ZONE_SUBTY}). See the FEMA Flood Map Service Center for full FC-FIRM details.`,
+        details: `FEMA has mapped a future conditions flood designation at this location (${best.ZONE_SUBTY}). FC-FIRM reflects anticipated changes in land use and hydrology, not specifically climate change. See the FEMA Flood Map Service Center for full FC-FIRM details.`,
         rawData: { zoneSubtype: best.ZONE_SUBTY }
       };
     }
@@ -570,8 +575,15 @@ const ClimateDataFetcher = {
   },
 
   // ============================================
-  // EXTREME PRECIPITATION — Projected Annual Total
+  // EXTREME PRECIPITATION — Days exceeding local historical 95th percentile
   // ============================================
+  // Methodology:
+  //   1. Fetch historical daily series (1981–2010) → derive the 95th percentile of
+  //      wet days (>= 0.1 mm/day) as a location-specific extreme threshold.
+  //   2. Fetch mid-century daily series (2050–2060) → count days exceeding that threshold.
+  //   3. Average by number of years in response to get days/year.
+  // This is area-relative: what counts as "extreme" for a desert location is
+  // defined by that location's own precipitation distribution, not a global cutoff.
 
   async fetchExtremePrecipitationRisk(propertyData) {
     if (!propertyData.latitude || !propertyData.longitude ||
@@ -581,28 +593,54 @@ const ClimateDataFetcher = {
 
     try {
       const point = encodeURIComponent(`POINT(${propertyData.longitude} ${propertyData.latitude})`);
-      const { start, end } = CLIMATE_CONSTANTS.MID_CENTURY;
-      // freq=YS: response rows are [min, mean, max, std, count] per year.
-      // row[1] = mean daily precipitation rate in kg/m²/s (numerically equal to mm/s).
-      const url = `${this.CAL_ADAPT_BASE_URL}/series/${CLIMATE_CONSTANTS.SLUGS.PRECIP}/events/?g=${point}&freq=YS&start=${start}&end=${end}`;
+      const { start: futStart, end: futEnd } = CLIMATE_CONSTANTS.MID_CENTURY;
+      const { start: histStart, end: histEnd } = CLIMATE_CONSTANTS.HISTORICAL;
 
-      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      if (!response.ok) throw new Error(`Cal-Adapt API returned ${response.status}`);
+      // Fetch historical baseline and mid-century projection in parallel.
+      // Both return flat daily kg/m²/s values (no freq/stat params).
+      const [histResp, futResp] = await Promise.all([
+        fetch(`${this.CAL_ADAPT_BASE_URL}/series/${CLIMATE_CONSTANTS.SLUGS.PRECIP_HIST}/events/?g=${point}&start=${histStart}&end=${histEnd}`, { headers: { 'Accept': 'application/json' } }),
+        fetch(`${this.CAL_ADAPT_BASE_URL}/series/${CLIMATE_CONSTANTS.SLUGS.PRECIP}/events/?g=${point}&start=${futStart}&end=${futEnd}`, { headers: { 'Accept': 'application/json' } })
+      ]);
 
-      const result = await response.json();
-      if (!result.data || !result.data.length) throw new Error('No precipitation data returned');
+      if (!histResp.ok) throw new Error(`Cal-Adapt historical API returned ${histResp.status}`);
+      if (!futResp.ok)  throw new Error(`Cal-Adapt future API returned ${futResp.status}`);
 
-      // Convert mean daily rate (kg/m²/s) to annual total inches:
-      //   rate × 86400 s/day × 365 days/yr ÷ 25.4 mm/in
-      const annualValues = result.data
-        .filter(row => Array.isArray(row) && row[1] != null)
-        .map(row => row[1] * 86400 * 365 / 25.4);
+      const [histResult, futResult] = await Promise.all([histResp.json(), futResp.json()]);
 
-      if (!annualValues.length) throw new Error('Unable to calculate precipitation statistics');
+      if (!histResult.data || !histResult.data.length) throw new Error('No historical precipitation data');
+      if (!futResult.data  || !futResult.data.length)  throw new Error('No future precipitation data');
 
-      const avgAnnualInches = annualValues.reduce((a, b) => a + b, 0) / annualValues.length;
+      // Convert kg/m²/s → mm/day (× 86400). Filter to wet days (≥ 0.1 mm/day).
+      const toMmDay = v => v * 86400;
+      const WET_DAY_MM = 0.1;
 
-      return this.classifyExtremePrecipitationRisk(avgAnnualInches);
+      const histWetDays = histResult.data
+        .filter(v => v != null)
+        .map(toMmDay)
+        .filter(v => v >= WET_DAY_MM)
+        .sort((a, b) => a - b);
+
+      if (!histWetDays.length) throw new Error('No wet days in historical data');
+
+      // 95th percentile of historical wet-day distribution = local extreme threshold
+      const p95idx = Math.floor(histWetDays.length * 0.95);
+      const thresholdMmDay = histWetDays[Math.min(p95idx, histWetDays.length - 1)];
+      const thresholdInDay = thresholdMmDay / 25.4;
+
+      // Count mid-century days exceeding local threshold
+      const futDaysAbove = futResult.data
+        .filter(v => v != null)
+        .map(toMmDay)
+        .filter(v => v > thresholdMmDay).length;
+
+      const futYears = new Set(
+        (futResult.index || []).map(ts => String(ts).substring(0, 4))
+      ).size || 11;
+
+      const avgDaysPerYear = futDaysAbove / futYears;
+
+      return this.classifyExtremePrecipitation(avgDaysPerYear, thresholdInDay);
 
     } catch (error) {
       this.logError('🌧️', 'Error fetching extreme precipitation risk', error);
@@ -614,28 +652,31 @@ const ClimateDataFetcher = {
     }
   },
 
-  classifyExtremePrecipitationRisk(avgAnnualInches) {
-    const inches = avgAnnualInches.toFixed(1);
+  classifyExtremePrecipitation(avgDaysPerYear, thresholdInDay) {
+    const days = Math.round(avgDaysPerYear);
+    const thresh = thresholdInDay.toFixed(2);
     let level, description, details;
 
-    if (avgAnnualInches < 10) {
+    // Thresholds: days/year exceeding the local historical 95th percentile wet-day intensity.
+    // A higher count means extreme events are becoming more frequent relative to the baseline.
+    if (days < 5) {
       level = 0; description = 'Minimal';
-      details = `Projected average annual precipitation of ${inches} inches by mid-century. Very low precipitation — characteristic of arid or desert conditions.`;
-    } else if (avgAnnualInches < 20) {
+      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day — historical 95th percentile for this area) by mid-century. Minimal increase in heavy precipitation days relative to the historical baseline.`;
+    } else if (days < 12) {
       level = 1; description = 'Low';
-      details = `Projected average annual precipitation of ${inches} inches by mid-century. Low precipitation with limited extreme rainfall risk.`;
-    } else if (avgAnnualInches < 35) {
+      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. Some increase in heavy precipitation days — storm drainage and runoff management remain routine concerns.`;
+    } else if (days < 20) {
       level = 2; description = 'Moderate';
-      details = `Projected average annual precipitation of ${inches} inches by mid-century. Moderate precipitation — storm and flooding risk is a seasonal concern.`;
-    } else if (avgAnnualInches < 50) {
+      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. Moderate increase in heavy precipitation days — elevated risk of localized flooding, erosion, and drainage stress.`;
+    } else if (days < 30) {
       level = 3; description = 'High';
-      details = `Projected average annual precipitation of ${inches} inches by mid-century. High precipitation — significant flood and runoff risk during wet seasons.`;
+      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. High frequency of heavy precipitation events — significant flood, runoff, and infrastructure risk during wet seasons.`;
     } else {
       level = 4; description = 'Severe';
-      details = `Projected average annual precipitation of ${inches} inches by mid-century. Very high precipitation — among the highest in California. Serious flooding and erosion risk.`;
+      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. Severe increase in extreme precipitation frequency — among the highest projected in California. Serious flooding and erosion risk.`;
     }
 
-    return { available: true, level, description, details, rawData: { avgAnnualInches: inches } };
+    return { available: true, level, description, details, rawData: { avgDaysPerYear: days, thresholdInDay: thresh } };
   },
 
   // ============================================
@@ -656,11 +697,58 @@ const ClimateDataFetcher = {
       };
     }
 
-    return {
-      available: true, level: 1,
-      description: 'Verify risk',
-      details: "This property is in a coastal area potentially affected by sea level rise. California projects 0.6–1.5 feet of rise by 2050 under intermediate scenarios, and up to 3.5 feet by 2100 under high scenarios (NOAA 2022). Check NOAA's Sea Level Rise Viewer and local flood zone maps for site-specific inundation scenarios."
-    };
+    // Fetch elevation from USGS 3DEP Elevation Point Query Service.
+    // Falls back gracefully if unavailable — coastal warning still shown.
+    let elevationFt = null;
+    try {
+      const elevUrl = `https://epqs.nationalmap.gov/v1/json?x=${propertyData.longitude}&y=${propertyData.latitude}&wkid=4326&includeDate=false`;
+      const elevResponse = await fetch(elevUrl, { headers: { 'Accept': 'application/json' } });
+      if (elevResponse.ok) {
+        const elevData = await elevResponse.json();
+        // Response: { value: "12.34" } in meters
+        const meters = parseFloat(elevData.value);
+        if (!isNaN(meters)) elevationFt = meters * 3.28084;
+      }
+    } catch (_) {
+      // Non-fatal — proceed without elevation data
+    }
+
+    return this.classifySeaLevelRise(elevationFt);
+  },
+
+  classifySeaLevelRise(elevationFt) {
+    const LOW_ELEV_THRESHOLD_FT = 15;
+
+    if (elevationFt === null) {
+      // Elevation lookup failed — give combined warning covering both inundation and cliff erosion
+      return {
+        available: true, level: 1,
+        description: 'Verify risk',
+        details: "This property is in a coastal area. California projects 0.6–1.5 ft of sea level rise by 2050 and up to 3.5 ft by 2100 (NOAA 2022). Low-elevation properties face direct inundation risk. Elevated coastal properties (e.g., cliff-top locations) remain vulnerable to accelerating cliff retreat and erosion driven by sea level rise and wave action — elevation alone does not eliminate risk. Check NOAA's Sea Level Rise Viewer and the California Coastal Commission's Hazard Maps for site-specific assessment.",
+        rawData: { elevationFt: null }
+      };
+    }
+
+    const elevStr = Math.round(elevationFt);
+
+    if (elevationFt <= LOW_ELEV_THRESHOLD_FT) {
+      // Low elevation — inundation risk is primary concern
+      const level = elevationFt <= 5 ? 3 : elevationFt <= 10 ? 2 : 1;
+      const desc  = level === 3 ? 'High' : level === 2 ? 'Moderate' : 'Low';
+      return {
+        available: true, level, description: desc,
+        details: `Property elevation is approximately ${elevStr} ft above sea level. California projects 0.6–1.5 ft of sea level rise by 2050 and up to 3.5 ft by 2100 under high scenarios (NOAA 2022). At this elevation, direct inundation, increased tidal flooding, and storm surge risk are significant concerns. Check NOAA's Sea Level Rise Viewer for site-specific inundation scenarios.`,
+        rawData: { elevationFt: elevStr }
+      };
+    } else {
+      // Higher elevation — cliff erosion and coastal bluff retreat are the primary concern
+      return {
+        available: true, level: 1,
+        description: 'Verify risk',
+        details: `Property elevation is approximately ${elevStr} ft above sea level. While direct inundation risk is lower at this elevation, coastal properties at any height remain vulnerable to cliff retreat and bluff erosion accelerated by sea level rise, wave action, and storm events. Elevation does not eliminate sea level rise risk for properties near coastal bluffs. Check the California Coastal Commission's Coastal Hazards Maps and NOAA's Sea Level Rise Viewer for site-specific erosion and inundation assessments.`,
+        rawData: { elevationFt: elevStr }
+      };
+    }
   },
 
   isNearCaliforniaCoast(lat, lon) {

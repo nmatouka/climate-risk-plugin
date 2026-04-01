@@ -18,6 +18,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] - 2026-04-01
+
+### Fixed
+- **Flood zone 0.2% classification** — Moderate (500-year) flood zone was never shown because `FLD_ZONE` never contains "0.2". Fixed to check `ZONE_SUBTY` for "0.2 PCT", which is how FEMA encodes shaded Zone X in the NFHL layer
+- **Sea level rise** — Now fetches property elevation via USGS 3DEP Elevation Point Query Service; properties ≤15ft show inundation risk with elevation-specific severity; properties above 15ft show cliff/bluff erosion caveat noting elevation alone does not eliminate risk
+
+### Changed
+- **Extreme Precipitation** — Replaced projected annual total rainfall with a locally-relative metric: counts mid-century days exceeding the historical 95th percentile wet-day intensity for that specific location (Cal-Adapt HadGEM2-ES historical 1981–2010 baseline). Renamed from "Extreme Precipitation Risk" to reflect frequency of extreme events rather than total volume
+- **FC-FIRM projected flood** — Details text now explicitly clarifies that FC-FIRM reflects anticipated land use and hydrology changes, not specifically climate change projections
+- **Mid-Century Projections section** — Subtitle now names the specific model and scenario (HadGEM2-ES, RCP 8.5) and notes that results from other models may differ
+- **Geocoding fallback** — When full-address geocoding fails and ZIP centroid is used, a visible warning banner is shown so users know results may not reflect the specific property location
+
+### Technical
+- Added `PRECIP_HIST` slug (`pr_day_HadGEM2-ES_historical`) and `HISTORICAL` date range (1981–2010) to constants
+- `fetchExtremePrecipitationRisk` now makes two parallel Cal-Adapt requests (historical + future) to derive local threshold
+- `classifySeaLevelRise(elevationFt)` new helper; `fetchSeaLevelRiseRisk` calls USGS EPQS before classifying
+- Added `epqs.nationalmap.gov` to manifest `host_permissions`
+- Added `geocode-warning` element to sidepanel.html with amber styling; shown when `isZipFallback` is set
+
+---
+
 ## [1.5.0] - 2026-03-20
 
 ### Added
@@ -153,6 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Summary |
 |---------|------|---------|
+| **1.5.1** | 2026-04-01 | Fixed flood 0.2% zone, elevation-aware sea level rise, local precip threshold |
 | **1.5.0** | 2026-03-20 | 8 indicators, Current/Projected layout, live FEMA API, fixed heat days |
 | **1.4.0** | 2025-02-20 | Multi-site support (6 sites), badge indicator, pin prompt |
 | **1.3.0** | 2025-01 | Chrome Side Panel refactor, no DOM modification |
@@ -177,7 +199,8 @@ No security issues reported.
 
 ---
 
-[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.1
 [1.5.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.0
 [1.4.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.4.0
 [1.3.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.3.0
