@@ -26,7 +26,8 @@ const CLIMATE_CONSTANTS = {
   FEMA_NFHL_URL: 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query',
 
   SLUGS: {
-    TASMAX:          'tasmax_day_HadGEM2-ES_rcp85',           // Daily max temperature
+    TASMAX:          'tasmax_day_HadGEM2-ES_rcp85',           // Daily max temperature (future)
+    TASMAX_HIST:     'tasmax_day_HadGEM2-ES_historical',      // Daily max temperature (historical baseline)
     PRECIP:          'pr_day_HadGEM2-ES_rcp85',               // Daily precipitation rate (future)
     PRECIP_HIST:     'pr_day_HadGEM2-ES_historical',          // Daily precipitation rate (historical baseline)
     FIRE_PROB:       'fireprob_10y_HadGEM2-ES_rcp85_bau'      // Decadal wildfire probability (UC Merced)
@@ -97,7 +98,7 @@ const ClimateDataFetcher = {
         this.withTimeout(this.fetchFloodRisks(propertyData), 15000, 'Flood'),
         this.withTimeout(this.fetchSeaLevelRiseRisk(propertyData), 5000, 'SeaLevel'),
         this.withTimeout(this.fetchHeatRisk(propertyData), 15000, 'Heat'),
-        this.withTimeout(this.fetchExtremeHeatDays(propertyData), 30000, 'ExtremeHeatDays'),
+        this.withTimeout(this.fetchExtremeHeatDays(propertyData), 60000, 'ExtremeHeatDays'),
         this.withTimeout(this.fetchExtremePrecipitationRisk(propertyData), 15000, 'ExtremePrecip')
       ]);
 
@@ -183,7 +184,7 @@ const ClimateDataFetcher = {
         available: true,
         level: 0,
         description: 'Minimal',
-        details: 'Property is not located in a designated CAL FIRE Fire Hazard Severity Zone.'
+        details: 'No Fire Hazard Severity Zone (FHSZ) designation applies to this location under CAL FIRE mapping. This is a regulatory classification, not a fire risk assessment — urban and suburban areas are frequently unzoned even when adjacent to wildland interface. Check with your local fire department or use the CAL FIRE FHSZ viewer for complete local mapping.'
       };
     }
 
@@ -195,7 +196,7 @@ const ClimateDataFetcher = {
 
     if (!hazClass || hazClass === 'Non-Wildland/Non-Urban') {
       level = 0; description = 'Minimal';
-      details = 'Property is in a non-wildland/non-urban area with minimal wildfire risk.';
+      details = 'No Fire Hazard Severity Zone (FHSZ) designation applies to this location under CAL FIRE mapping. This is a regulatory classification, not a fire risk assessment — urban and suburban areas are frequently unzoned even when adjacent to wildland interface.';
     } else if (hazClass === 'Moderate' || hazCode === 1) {
       level = 2; description = 'Moderate';
       details = 'Property is in a Moderate Fire Hazard Severity Zone. Some wildfire risk exists based on fuel loading, slope, and fire weather conditions.';
@@ -504,8 +505,14 @@ const ClimateDataFetcher = {
   },
 
   // ============================================
-  // EXTREME HEAT DAYS — Days Above 95°F (direct daily count from Cal-Adapt)
+  // EXTREME HEAT DAYS — Days exceeding local historical 95th-percentile temperature
   // ============================================
+  // Methodology (mirrors ClimateShed ExtremeHeatDaysRepository):
+  //   1. Fetch historical daily max temps (1981–2010) → 95th percentile = local extreme threshold.
+  //      By definition, ~18 days/year (5% of 365) exceeded this historically.
+  //   2. Fetch mid-century daily max temps (2050–2060) → count days above that threshold.
+  // This is area-relative: a coastal community with historically mild summers will show a
+  // higher count than a desert community already acclimatized to high heat at the same temp.
 
   async fetchExtremeHeatDays(propertyData) {
     if (!propertyData.latitude || !propertyData.longitude ||
@@ -514,31 +521,38 @@ const ClimateDataFetcher = {
     }
 
     try {
-      // No freq or stat parameters — returns individual daily values in °F.
-      // Response: { "index": ["2050-01-01T00:00:00Z", ...], "data": [60.1, 61.4, ...] }
       const point = encodeURIComponent(`POINT(${propertyData.longitude} ${propertyData.latitude})`);
-      const { start, end } = CLIMATE_CONSTANTS.MID_CENTURY;
-      const url = `${this.CAL_ADAPT_BASE_URL}/series/${CLIMATE_CONSTANTS.SLUGS.TASMAX}/events/?g=${point}&start=${start}&end=${end}&imperial=True`;
+      const { start: histStart, end: histEnd } = CLIMATE_CONSTANTS.HISTORICAL;
+      const { start: futStart, end: futEnd } = CLIMATE_CONSTANTS.MID_CENTURY;
 
-      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      if (!response.ok) throw new Error(`Cal-Adapt API returned ${response.status}`);
+      // Fetch historical baseline and mid-century projection in parallel.
+      // Both return flat daily °F values (imperial=True, no freq/stat).
+      const [histResp, futResp] = await Promise.all([
+        fetch(`${this.CAL_ADAPT_BASE_URL}/series/${CLIMATE_CONSTANTS.SLUGS.TASMAX_HIST}/events/?g=${point}&start=${histStart}&end=${histEnd}&imperial=True`, { headers: { 'Accept': 'application/json' } }),
+        fetch(`${this.CAL_ADAPT_BASE_URL}/series/${CLIMATE_CONSTANTS.SLUGS.TASMAX}/events/?g=${point}&start=${futStart}&end=${futEnd}&imperial=True`, { headers: { 'Accept': 'application/json' } })
+      ]);
 
-      const result = await response.json();
-      if (!result.data || !result.data.length || !result.index || !result.index.length) {
-        throw new Error('No daily temperature data returned');
-      }
+      if (!histResp.ok) throw new Error(`Cal-Adapt historical heat API returned ${histResp.status}`);
+      if (!futResp.ok)  throw new Error(`Cal-Adapt future heat API returned ${futResp.status}`);
 
-      // Count days above 95°F directly from the daily values.
-      const daysAbove95 = result.data.filter(v => v > 95.0).length;
+      const [histResult, futResult] = await Promise.all([histResp.json(), futResp.json()]);
 
-      // Derive year count from index timestamps rather than hardcoding 11,
-      // which guards against partial API responses.
-      const uniqueYears = new Set(result.index.map(ts => String(ts).substring(0, 4))).size;
-      const avgDaysPerYear = uniqueYears > 0 ? daysAbove95 / uniqueYears : 0;
+      if (!histResult.data || !histResult.data.length) throw new Error('No historical temperature data');
+      if (!futResult.data  || !futResult.data.length)  throw new Error('No future temperature data');
 
-      this.debug(`Heat days: ${daysAbove95} total over ${uniqueYears} yrs = ${avgDaysPerYear.toFixed(1)}/yr`);
+      // 95th percentile of all historical daily max temps = local extreme heat threshold.
+      const sortedHist = histResult.data.filter(v => v != null).sort((a, b) => a - b);
+      const p95idx = Math.floor(sortedHist.length * 0.95);
+      const threshold = sortedHist[Math.min(p95idx, sortedHist.length - 1)];
 
-      return this.classifyExtremeHeatDays(avgDaysPerYear);
+      // Count mid-century days exceeding the local threshold.
+      const daysAbove = futResult.data.filter(v => v != null && v > threshold).length;
+      const uniqueYears = new Set((futResult.index || []).map(ts => String(ts).substring(0, 4))).size || 11;
+      const avgDaysPerYear = daysAbove / uniqueYears;
+
+      this.debug(`Heat days: threshold=${threshold.toFixed(1)}°F, ${daysAbove} days over ${uniqueYears} yrs = ${avgDaysPerYear.toFixed(1)}/yr`);
+
+      return this.classifyExtremeHeatDays(avgDaysPerYear, threshold);
 
     } catch (error) {
       this.logError('🔆', 'Error fetching extreme heat days', error);
@@ -550,28 +564,31 @@ const ClimateDataFetcher = {
     }
   },
 
-  classifyExtremeHeatDays(avgDaysPerYear) {
+  classifyExtremeHeatDays(avgDaysPerYear, thresholdF) {
     const days = Math.round(avgDaysPerYear);
+    const thresh = thresholdF != null ? `${Math.round(thresholdF)}°F` : 'local threshold';
     let level, description, details;
 
-    if (days < 10) {
+    // Baseline expectation: ~18 days/year (5% of 365) exceeded the threshold historically.
+    // Thresholds calibrated against ClimateShed Phase 0 validation across California's climate zones.
+    if (days < 18) {
       level = 0; description = 'Minimal';
-      details = `Cal-Adapt projects approximately ${days} days per year above 95°F by mid-century (2050–2060). Minimal extreme heat exposure.`;
+      details = `Cal-Adapt projects approximately ${days} days/year above the local historical 95th-percentile temperature (${thresh}) by mid-century (2050–2060) — near or below the historical baseline. Uses HadGEM2-ES / RCP 8.5 (high-emissions, warm scenario — projections from cooler models would be lower).`;
     } else if (days < 30) {
       level = 1; description = 'Low';
-      details = `Cal-Adapt projects approximately ${days} days per year above 95°F by mid-century (2050–2060). Some extreme heat days expected — adequate cooling recommended.`;
-    } else if (days < 60) {
+      details = `Cal-Adapt projects approximately ${days} days/year above the local historical 95th-percentile temperature (${thresh}) by mid-century — a modest increase over the historical baseline of ~18 days/year. Uses HadGEM2-ES / RCP 8.5.`;
+    } else if (days < 55) {
       level = 2; description = 'Moderate';
-      details = `Cal-Adapt projects approximately ${days} days per year above 95°F by mid-century (2050–2060). Frequent extreme heat — reliable air conditioning essential.`;
-    } else if (days < 90) {
+      details = `Cal-Adapt projects approximately ${days} days/year above the local historical 95th-percentile temperature (${thresh}) by mid-century — roughly 2–3× the historical baseline. Temperatures that were historically rare will become common. Uses HadGEM2-ES / RCP 8.5.`;
+    } else if (days < 80) {
       level = 3; description = 'High';
-      details = `Cal-Adapt projects approximately ${days} days per year above 95°F by mid-century (2050–2060). Nearly a full season above 95°F — health risks, energy demand, and outdoor impacts are significant.`;
+      details = `Cal-Adapt projects approximately ${days} days/year above the local historical 95th-percentile temperature (${thresh}) by mid-century — roughly 3–4× the historical baseline. Temperatures historically rare will be frequent seasonal events. Uses HadGEM2-ES / RCP 8.5.`;
     } else {
       level = 4; description = 'Severe';
-      details = `Cal-Adapt projects approximately ${days} days per year above 95°F by mid-century (2050–2060). Prolonged dangerous heat for months at a time — may significantly impact habitability.`;
+      details = `Cal-Adapt projects approximately ${days} days/year above the local historical 95th-percentile temperature (${thresh}) by mid-century — more than 4× the historical baseline. Temperatures historically rare will occur for months each year. Uses HadGEM2-ES / RCP 8.5 (high-emissions, warm scenario).`;
     }
 
-    return { available: true, level, description, details, rawData: { avgDaysAbove95F: days } };
+    return { available: true, level, description, details, rawData: { avgDaysPerYear: days, thresholdF: thresholdF != null ? Math.round(thresholdF) : null } };
   },
 
   // ============================================
@@ -611,9 +628,9 @@ const ClimateDataFetcher = {
       if (!histResult.data || !histResult.data.length) throw new Error('No historical precipitation data');
       if (!futResult.data  || !futResult.data.length)  throw new Error('No future precipitation data');
 
-      // Convert kg/m²/s → mm/day (× 86400). Filter to wet days (≥ 0.1 mm/day).
+      // Convert kg/m²/s → mm/day (× 86400). Filter to wet days (≥ 1 mm/day, matching ClimateShed).
       const toMmDay = v => v * 86400;
-      const WET_DAY_MM = 0.1;
+      const WET_DAY_MM = 1.0;
 
       const histWetDays = histResult.data
         .filter(v => v != null)
@@ -623,10 +640,9 @@ const ClimateDataFetcher = {
 
       if (!histWetDays.length) throw new Error('No wet days in historical data');
 
-      // 95th percentile of historical wet-day distribution = local extreme threshold
+      // 95th percentile of historical wet-day distribution = local extreme threshold (mm/day)
       const p95idx = Math.floor(histWetDays.length * 0.95);
       const thresholdMmDay = histWetDays[Math.min(p95idx, histWetDays.length - 1)];
-      const thresholdInDay = thresholdMmDay / 25.4;
 
       // Count mid-century days exceeding local threshold
       const futDaysAbove = futResult.data
@@ -640,7 +656,7 @@ const ClimateDataFetcher = {
 
       const avgDaysPerYear = futDaysAbove / futYears;
 
-      return this.classifyExtremePrecipitation(avgDaysPerYear, thresholdInDay);
+      return this.classifyExtremePrecipitation(avgDaysPerYear, thresholdMmDay);
 
     } catch (error) {
       this.logError('🌧️', 'Error fetching extreme precipitation risk', error);
@@ -652,31 +668,34 @@ const ClimateDataFetcher = {
     }
   },
 
-  classifyExtremePrecipitation(avgDaysPerYear, thresholdInDay) {
-    const days = Math.round(avgDaysPerYear);
-    const thresh = thresholdInDay.toFixed(2);
+  classifyExtremePrecipitation(avgDaysPerYear, thresholdMmDay) {
+    const rounded = Math.round(avgDaysPerYear);
+    const daysStr = rounded === 1 ? '1 day' : `${rounded} days`;
+    const thresh = `${thresholdMmDay.toFixed(0)} mm/day`;
     let level, description, details;
 
-    // Thresholds: days/year exceeding the local historical 95th percentile wet-day intensity.
-    // A higher count means extreme events are becoming more frequent relative to the baseline.
-    if (days < 5) {
+    // Classification: days/year in 2050–2060 exceeding the local historical 95th-percentile
+    // wet-day intensity (R95p variant). Thresholds calibrated against ClimateShed validation
+    // across California's climate zones. California's overall precipitation direction under
+    // climate change is uncertain; the robust signal is increasing storm intensity.
+    if (rounded < 1) {
       level = 0; description = 'Minimal';
-      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day — historical 95th percentile for this area) by mid-century. Minimal increase in heavy precipitation days relative to the historical baseline.`;
-    } else if (days < 12) {
+      details = `Cal-Adapt projects less than 1 day/year above the local extreme precipitation threshold (${thresh} — historical 95th percentile of wet days for this area) by mid-century. Very few extreme intensity rainfall events projected.`;
+    } else if (rounded < 3) {
       level = 1; description = 'Low';
-      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. Some increase in heavy precipitation days — storm drainage and runoff management remain routine concerns.`;
-    } else if (days < 20) {
+      details = `Cal-Adapt projects approximately ${daysStr}/year above the local extreme precipitation threshold (${thresh}) by mid-century. A modest number of extreme intensity rainfall events projected.`;
+    } else if (rounded < 6) {
       level = 2; description = 'Moderate';
-      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. Moderate increase in heavy precipitation days — elevated risk of localized flooding, erosion, and drainage stress.`;
-    } else if (days < 30) {
+      details = `Cal-Adapt projects approximately ${daysStr}/year above the local extreme precipitation threshold (${thresh}) by mid-century. Meaningful increase in extreme rainfall intensity — elevated flood and runoff potential.`;
+    } else if (rounded < 10) {
       level = 3; description = 'High';
-      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. High frequency of heavy precipitation events — significant flood, runoff, and infrastructure risk during wet seasons.`;
+      details = `Cal-Adapt projects approximately ${daysStr}/year above the local extreme precipitation threshold (${thresh}) by mid-century. Elevated frequency of extreme precipitation events — significant flood, erosion, and infrastructure stress during wet seasons.`;
     } else {
       level = 4; description = 'Severe';
-      details = `Cal-Adapt projects approximately ${days} days/year above the local extreme precipitation threshold (${thresh} in/day) by mid-century. Severe increase in extreme precipitation frequency — among the highest projected in California. Serious flooding and erosion risk.`;
+      details = `Cal-Adapt projects approximately ${daysStr}/year above the local extreme precipitation threshold (${thresh}) by mid-century. Severe increase in extreme precipitation intensity — among the highest projected in California. Serious flooding and erosion risk.`;
     }
 
-    return { available: true, level, description, details, rawData: { avgDaysPerYear: days, thresholdInDay: thresh } };
+    return { available: true, level, description, details, rawData: { avgDaysPerYear: rounded, thresholdMmDay: thresholdMmDay.toFixed(0) } };
   },
 
   // ============================================
@@ -701,13 +720,15 @@ const ClimateDataFetcher = {
     // Falls back gracefully if unavailable — coastal warning still shown.
     let elevationFt = null;
     try {
-      const elevUrl = `https://epqs.nationalmap.gov/v1/json?x=${propertyData.longitude}&y=${propertyData.latitude}&wkid=4326&includeDate=false`;
+      // units=Feet → response value is already in feet.
+      // USGS returns very large negative numbers (e.g. -1000000) for water or unmapped pixels.
+      const elevUrl = `https://epqs.nationalmap.gov/v1/json?x=${propertyData.longitude}&y=${propertyData.latitude}&units=Feet&includeDate=False`;
       const elevResponse = await fetch(elevUrl, { headers: { 'Accept': 'application/json' } });
       if (elevResponse.ok) {
         const elevData = await elevResponse.json();
-        // Response: { value: "12.34" } in meters
-        const meters = parseFloat(elevData.value);
-        if (!isNaN(meters)) elevationFt = meters * 3.28084;
+        // value may be returned as a number or a JSON-encoded string depending on API version
+        const ft = parseFloat(elevData.value);
+        if (!isNaN(ft) && ft > -9999) elevationFt = ft;
       }
     } catch (_) {
       // Non-fatal — proceed without elevation data
@@ -717,36 +738,51 @@ const ClimateDataFetcher = {
   },
 
   classifySeaLevelRise(elevationFt) {
-    const LOW_ELEV_THRESHOLD_FT = 15;
+    // NOAA 2022 Sea Level Rise Technical Report — California coast:
+    //   Intermediate scenario:    ~0.8–1.5 ft by 2050
+    //   High scenario:            ~2 ft by 2050, ~7 ft by 2100
+    // Elevation tiers validated against ClimateShed Phase 0 across California coastal zones.
 
     if (elevationFt === null) {
-      // Elevation lookup failed — give combined warning covering both inundation and cliff erosion
       return {
         available: true, level: 1,
         description: 'Verify risk',
-        details: "This property is in a coastal area. California projects 0.6–1.5 ft of sea level rise by 2050 and up to 3.5 ft by 2100 (NOAA 2022). Low-elevation properties face direct inundation risk. Elevated coastal properties (e.g., cliff-top locations) remain vulnerable to accelerating cliff retreat and erosion driven by sea level rise and wave action — elevation alone does not eliminate risk. Check NOAA's Sea Level Rise Viewer and the California Coastal Commission's Hazard Maps for site-specific assessment.",
+        details: "This property is in a coastal area. NOAA projects approximately 0.8–1.5 ft of sea level rise along the California coast by 2050 under intermediate to intermediate-high scenarios, and up to ~7 ft by 2100 under the high scenario. Elevation data was unavailable — low-elevation properties face direct inundation risk, while elevated coastal properties near bluffs or cliffs remain vulnerable to accelerating cliff retreat and erosion regardless of height. Check NOAA's Sea Level Rise Viewer and the California Coastal Commission's Hazard Maps for site-specific assessment.",
         rawData: { elevationFt: null }
       };
     }
 
-    const elevStr = Math.round(elevationFt);
+    const e = Math.round(elevationFt);
 
-    if (elevationFt <= LOW_ELEV_THRESHOLD_FT) {
-      // Low elevation — inundation risk is primary concern
-      const level = elevationFt <= 5 ? 3 : elevationFt <= 10 ? 2 : 1;
-      const desc  = level === 3 ? 'High' : level === 2 ? 'Moderate' : 'Low';
+    if (elevationFt <= 3) {
       return {
-        available: true, level, description: desc,
-        details: `Property elevation is approximately ${elevStr} ft above sea level. California projects 0.6–1.5 ft of sea level rise by 2050 and up to 3.5 ft by 2100 under high scenarios (NOAA 2022). At this elevation, direct inundation, increased tidal flooding, and storm surge risk are significant concerns. Check NOAA's Sea Level Rise Viewer for site-specific inundation scenarios.`,
-        rawData: { elevationFt: elevStr }
+        available: true, level: 4, description: 'Severe',
+        details: `Property elevation is approximately ${e} ft above sea level. At this elevation, this location is within the range of NOAA's high sea level rise scenario for California by 2050 (~2 ft) and well within high-end 2100 scenarios (~7 ft under the high scenario). Storm surge compounds this risk substantially. Flood insurance and long-term elevation planning are critical considerations.`,
+        rawData: { elevationFt: e }
+      };
+    } else if (elevationFt <= 10) {
+      return {
+        available: true, level: 3, description: 'High',
+        details: `Property elevation is approximately ${e} ft above sea level. This location is above NOAA's intermediate 2050 projections but within range of the high scenario (~2 ft by 2050) when combined with storm surge. Over the longer term, high-end 2100 scenarios project ~7 ft of rise. Coastal flooding and erosion are material concerns.`,
+        rawData: { elevationFt: e }
+      };
+    } else if (elevationFt <= 20) {
+      return {
+        available: true, level: 2, description: 'Moderate',
+        details: `Property elevation is approximately ${e} ft above sea level — above NOAA's intermediate 2050 projections but potentially affected by high-end 2100 scenarios (~7 ft) combined with storm surge. Coastal erosion and cliff retreat driven by sea level rise remain concerns regardless of elevation.`,
+        rawData: { elevationFt: e }
+      };
+    } else if (elevationFt <= 50) {
+      return {
+        available: true, level: 1, description: 'Low',
+        details: `Property elevation is approximately ${e} ft above sea level. Direct inundation from projected sea level rise is unlikely this century under NOAA's published scenarios. Coastal erosion, storm surge during extreme events, and cliff retreat at lower-lying areas nearby remain relevant — elevated coastal properties on bluffs are not immune to erosion-driven risk.`,
+        rawData: { elevationFt: e }
       };
     } else {
-      // Higher elevation — cliff erosion and coastal bluff retreat are the primary concern
       return {
-        available: true, level: 1,
-        description: 'Verify risk',
-        details: `Property elevation is approximately ${elevStr} ft above sea level. While direct inundation risk is lower at this elevation, coastal properties at any height remain vulnerable to cliff retreat and bluff erosion accelerated by sea level rise, wave action, and storm events. Elevation does not eliminate sea level rise risk for properties near coastal bluffs. Check the California Coastal Commission's Coastal Hazards Maps and NOAA's Sea Level Rise Viewer for site-specific erosion and inundation assessments.`,
-        rawData: { elevationFt: elevStr }
+        available: true, level: 0, description: 'Minimal',
+        details: `Property elevation is approximately ${e} ft above sea level — well above NOAA's published sea level rise scenarios for this century (~7 ft under the high scenario). If the property is situated on a coastal bluff, note that sea level rise can accelerate cliff erosion over longer time horizons regardless of current elevation. Check the California Coastal Commission for site-specific guidance.`,
+        rawData: { elevationFt: e }
       };
     }
   },

@@ -1,4 +1,4 @@
-# Climate Risk - California (v1.5.1)
+# Climate Risk - California (v1.5.2)
 
 A free, open-source Chrome extension that displays educational climate risk information for California real estate properties, helping homebuyers make informed decisions about climate hazards. This is a proof of concept and should not be relied upon to make purchasing decisions.
 
@@ -181,6 +181,15 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - ✨ Now → 2050 headline summary row showing whether projected risk is higher or lower
 - 🔧 Fixed Extreme Heat Days to use actual Cal-Adapt daily data (95°F threshold)
 - 🔧 Fixed Extreme Precipitation unit conversion and recalibrated thresholds
+
+### v1.5.2 (2026-04-08)
+- 🐛 Fixed NOAA 2100 sea level rise figure — corrected from 3.5 ft to ~7 ft (high scenario, NOAA 2022 TR)
+- 🐛 Fixed USGS elevation: large negative values (-1000000) for water/unmapped pixels now treated as unavailable
+- 🌡️ Extreme Heat Days now uses local historical 95th-percentile temperature threshold (Cal-Adapt 1981–2010 baseline) instead of fixed 95°F — coastal and mild-climate locations now correctly show higher risk
+- 🌧️ Extreme Precipitation classification thresholds recalibrated to ClimateShed validated values; wet day minimum raised from 0.1 to 1 mm/day
+- 🔥 Wildfire "not in FHSZ" detail text corrected — clarifies this is a regulatory classification, not a fire risk assessment
+- 🌊 Sea level rise elevation tiers aligned to ClimateShed validated thresholds (≤3 ft Severe, 3–10 High, 10–20 Moderate, 20–50 Low, >50 Minimal)
+- 🌊 Sea level rise 2050 range updated to 0.8–1.5 ft (intermediate to intermediate-high scenarios)
 
 ### v1.5.1 (2026-04-01)
 - 🐛 Fixed flood zone 0.2% (500-year) classification — Moderate level was never shown due to wrong field check

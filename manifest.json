@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Climate Risk - California",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "See wildfire, flood, heat & climate risks for California homes — on Zillow, Redfin, Realtor.com, Trulia & more.",
   "permissions": [
     "storage",

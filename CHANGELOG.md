@@ -18,6 +18,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.2] - 2026-04-08
+
+### Fixed
+- **NOAA 2100 sea level rise figure** — Corrected from 3.5 ft to ~7 ft under the high scenario (NOAA 2022 Technical Report). The 3.5 ft figure was incorrect and has been updated across all sea level rise detail text
+- **USGS elevation invalid values** — USGS EPQS returns very large negative numbers (~-1000000) for water surfaces and unmapped pixels. These are now guarded against (`> -9999` check) and treated as elevation unavailable rather than used as a real elevation
+
+### Changed
+- **Extreme Heat Days** — Replaced fixed 95°F threshold with the local historical 95th-percentile daily maximum temperature (Cal-Adapt `tasmax_day_HadGEM2-ES_historical`, 1981–2010 baseline). Now measures departure from local climate norms — coastal communities with historically mild summers correctly show higher risk than desert communities already acclimatized to high heat. Classification thresholds recalibrated: `<18` = Minimal, `18–30` = Low, `30–55` = Moderate, `55–80` = High, `≥80` = Severe (days/year above local threshold, baseline ~18 days/year)
+- **Extreme Precipitation wet day minimum** — Raised from 0.1 mm/day to 1 mm/day to match ClimateShed methodology
+- **Extreme Precipitation classification thresholds** — Recalibrated to ClimateShed validated values: `<1` = Minimal, `1–3` = Low, `3–6` = Moderate, `6–10` = High, `≥10` = Severe (days/year above local 95th-percentile threshold). Previous thresholds (5–30) were too high — virtually every location showed Minimal
+- **Wildfire "not in FHSZ" text** — Now reads: "This is a regulatory classification, not a fire risk assessment — urban and suburban areas are frequently unzoned even when adjacent to wildland interface"
+- **Sea level rise elevation tiers** — Aligned to ClimateShed validated thresholds: `≤3 ft` = Severe, `3–10` = High, `10–20` = Moderate, `20–50` = Low, `>50` = Minimal. Previous tiers (`≤5/5–10/10–15/>15`) were too coarse and omitted the Severe tier
+- **Sea level rise 2050 range** — Updated to "0.8–1.5 ft under intermediate to intermediate-high scenarios" (from "0.6–1.5 ft")
+
+### Technical
+- Added `TASMAX_HIST` slug (`tasmax_day_HadGEM2-ES_historical`) to constants
+- `fetchExtremeHeatDays` now makes two parallel Cal-Adapt requests (historical + future); timeout increased to 60s
+- `classifyExtremeHeatDays` now takes `(avgDaysPerYear, thresholdF)` and reports the local threshold in detail text
+- USGS elevation URL updated to use `units=Feet` directly (response value already in feet; removed `* 3.28084` conversion)
+- `classifySeaLevelRise` expanded from 2 branches to 5 tiers
+
+---
+
 ## [1.5.1] - 2026-04-01
 
 ### Fixed
@@ -174,6 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Summary |
 |---------|------|---------|
+| **1.5.2** | 2026-04-08 | Fixed NOAA figure, local heat days threshold, recalibrated precip/SLR tiers |
 | **1.5.1** | 2026-04-01 | Fixed flood 0.2% zone, elevation-aware sea level rise, local precip threshold |
 | **1.5.0** | 2026-03-20 | 8 indicators, Current/Projected layout, live FEMA API, fixed heat days |
 | **1.4.0** | 2025-02-20 | Multi-site support (6 sites), badge indicator, pin prompt |
@@ -199,7 +223,8 @@ No security issues reported.
 
 ---
 
-[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.5.2...HEAD
+[1.5.2]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.2
 [1.5.1]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.1
 [1.5.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.0
 [1.4.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.4.0
