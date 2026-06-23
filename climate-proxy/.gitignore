@@ -1,0 +1,9 @@
+# Wrangler local state/cache (contains account metadata; never commit)
+.wrangler/
+
+# Dependencies (we deploy via npx; no lockfile needed)
+node_modules/
+
+# Local secrets, if ever used
+.dev.vars
+.env

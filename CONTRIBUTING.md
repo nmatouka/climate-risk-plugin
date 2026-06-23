@@ -169,18 +169,19 @@ classifyWildfireRisk(hazClass, hazCode) {
 ### File Organization
 
 ```
-zillow-climate-risk/
+climate-risk-plugin/
 ├── manifest.json           # Don't modify version manually
-├── content/
-│   ├── content.js         # Main logic, property detection
-│   └── content.css        # Styling only
 ├── background/
-│   └── background.js      # Keep minimal
+│   └── background.js       # Service worker: icon badge + side-panel open
+├── sidepanel/
+│   ├── sidepanel.html
+│   ├── sidepanel.js        # URL parsing, state machine, rendering
+│   └── sidepanel.css       # Styling only
 ├── utils/
-│   ├── dataFetcher.js     # All API calls here
-│   └── cache.js           # Caching logic only
-└── popup/
-    └── ...                # Extension popup UI
+│   ├── datafetcher.js      # All risk API calls + classifiers
+│   └── cache.js            # Caching logic only
+└── climate-proxy/          # Cloudflare Worker proxy for the CMIP6 microservice
+    └── worker.js
 ```
 
 ### API Integration Guidelines

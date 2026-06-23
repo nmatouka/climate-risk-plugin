@@ -76,6 +76,11 @@
         <div id="projected-risk-container" class="climate-risk-list"></div>
       </div>
 
+      <div class="risk-section">
+        <div id="nri-section-header" class="section-header"></div>
+        <div id="nri-container" class="nri-container"></div>
+      </div>
+
       <div id="disclaimer" class="climate-risk-disclaimer"></div>
     </div>
 
@@ -88,17 +93,19 @@
       <ul>
         <li>Wildfire risk &amp; mid-century probability</li>
         <li>Flood zones &amp; future conditions (FC-FIRM)</li>
-        <li>Extreme heat &amp; extreme heat days</li>
-        <li>Extreme precipitation</li>
-        <li>Sea level rise</li>
+        <li>Extreme heat &amp; extreme heat days (CMIP6)</li>
+        <li>Precipitation change (CMIP6)</li>
+        <li>Sea level rise (NOAA tide gauges)</li>
+        <li>Multi-hazard index (FEMA NRI)</li>
       </ul>
 
       <h3>Data Sources</h3>
       <ul class="source-list">
         <li><a href="https://osfm.fire.ca.gov/" target="_blank" rel="noopener noreferrer">CAL FIRE</a></li>
         <li><a href="https://msc.fema.gov/" target="_blank" rel="noopener noreferrer">FEMA NFHL &amp; FC-FIRM</a></li>
-        <li><a href="https://cal-adapt.org/" target="_blank" rel="noopener noreferrer">Cal-Adapt (UC Berkeley / UC Merced)</a></li>
-        <li><a href="https://www.coastal.ca.gov/" target="_blank" rel="noopener noreferrer">CA Coastal Commission</a></li>
+        <li><a href="https://hazards.fema.gov/nri/" target="_blank" rel="noopener noreferrer">FEMA National Risk Index</a></li>
+        <li><a href="https://cal-adapt.org/" target="_blank" rel="noopener noreferrer">CMIP6 LOCA2 / Cal-Adapt (UC Berkeley / UC Merced)</a></li>
+        <li><a href="https://oceanservice.noaa.gov/hazards/sealevelrise/" target="_blank" rel="noopener noreferrer">NOAA Sea Level Rise (OPC 2024)</a></li>
       </ul>
 
       <h3>Privacy</h3>
@@ -111,7 +118,7 @@
   </footer>
 
   <script src="../utils/cache.js"></script>
-  <script src="../utils/dataFetcher.js"></script>
+  <script src="../utils/datafetcher.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

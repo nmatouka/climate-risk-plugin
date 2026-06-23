@@ -2,7 +2,7 @@
 
 // Loaded before this script via <script> tags in sidepanel.html:
 //   ../utils/cache.js       → exposes ClimateCache
-//   ../utils/dataFetcher.js → exposes ClimateDataFetcher
+//   ../utils/datafetcher.js → exposes ClimateDataFetcher
 
 const DEBUG = false;
 
@@ -435,7 +435,7 @@ function renderResults(propertyData, riskData) {
   renderSectionHeader(
     document.getElementById('projected-section-header'),
     'Mid-Century Projections',
-    'Climate model estimates for 2050–2060 (HadGEM2-ES, RCP 8.5 high-emissions). Results from other models or scenarios may differ.',
+    'LOCA2 CMIP6, 5-model ensemble, SSP3-7.0 (high-emissions), 2050–2059. Wildfire probability uses Cal-Adapt (UC Merced). Results from other models or scenarios may differ.',
     projectedLevel
   );
   renderRiskCards(document.getElementById('projected-risk-container'), [
@@ -451,25 +451,28 @@ function renderResults(propertyData, riskData) {
     },
     {
       name: 'Extreme Heat', icon: '☀️', data: riskData.heat,
-      source: 'Cal-Adapt',
+      source: 'CMIP6 LOCA2 ensemble',
       url: 'https://cal-adapt.org/'
     },
     {
       name: 'Extreme Heat Days', icon: '🔆', data: riskData.extremeHeatDays,
-      source: 'Cal-Adapt',
+      source: 'CMIP6 LOCA2 ensemble',
       url: 'https://cal-adapt.org/'
     },
     {
-      name: 'Extreme Precipitation', icon: '🌧️', data: riskData.extremePrecipitation,
-      source: 'Cal-Adapt',
+      name: 'Precipitation Change', icon: '🌧️', data: riskData.extremePrecipitation,
+      source: 'CMIP6 LOCA2 ensemble',
       url: 'https://cal-adapt.org/'
     },
     {
       name: 'Sea Level Rise', icon: '📈', data: riskData.seaLevelRise,
-      source: 'NOAA / CA Coastal Commission',
-      url: 'https://www.coastal.ca.gov/climate/slr/'
+      source: 'NOAA NOS / OPC 2024',
+      url: 'https://oceanservice.noaa.gov/hazards/sealevelrise/'
     }
   ]);
+
+  // Regional multi-hazard index (FEMA NRI) — present-day, its own section
+  renderNRI(riskData.nri);
 
   // Disclaimer
   const disc = document.getElementById('disclaimer');
@@ -549,6 +552,63 @@ function renderRiskCards(container, risks) {
 
     container.appendChild(item);
   });
+}
+
+// ─── FEMA NRI Section ─────────────────────────────────────────────────────────
+// Present-day multi-hazard index (its own section, not part of the Current →
+// 2050 narrative). Renders an overall badge plus per-hazard percentile rows.
+
+function renderNRI(nri) {
+  const headerEl = document.getElementById('nri-section-header');
+  const containerEl = document.getElementById('nri-container');
+  clearEl(headerEl);
+  clearEl(containerEl);
+
+  const SUBTITLE = 'Present-day multi-hazard risk vs. all U.S. census tracts';
+
+  if (!nri || !nri.available) {
+    const textDiv = createEl('div', 'section-header-text');
+    textDiv.appendChild(createEl('div', 'section-title', 'Regional Hazard Index (FEMA NRI)'));
+    textDiv.appendChild(createEl('div', 'section-subtitle', SUBTITLE));
+    headerEl.appendChild(textDiv);
+
+    const item = createEl('div', 'climate-risk-item');
+    const itemHeader = createEl('div', 'risk-item-header');
+    itemHeader.appendChild(createEl('span', 'risk-icon', '📊'));
+    itemHeader.appendChild(createEl('span', 'risk-name', 'FEMA National Risk Index'));
+    itemHeader.appendChild(createEl('span', 'risk-level risk-level-unknown', (nri && nri.description) || 'Not available'));
+    item.appendChild(itemHeader);
+    if (nri && nri.details) item.appendChild(createEl('div', 'risk-details', nri.details));
+    containerEl.appendChild(item);
+    return;
+  }
+
+  renderSectionHeader(headerEl, 'Regional Hazard Index (FEMA NRI)', SUBTITLE, nri.level);
+
+  if (nri.details) {
+    containerEl.appendChild(createEl('div', 'nri-summary', nri.details));
+  }
+
+  nri.hazards.forEach(h => {
+    const row = createEl('div', 'nri-hazard-row');
+    row.appendChild(createEl('span', 'nri-hazard-name', h.name));
+    if (h.pctile != null) {
+      row.appendChild(createEl('span', 'nri-hazard-pctile', `${Math.round(h.pctile)}th pctile`));
+    }
+    row.appendChild(createEl('span', `risk-level risk-level-${LEVEL_NAMES[h.level]}`, h.rating));
+    containerEl.appendChild(row);
+  });
+
+  const extras = [];
+  if (nri.socialVulnerability) extras.push(`Social vulnerability: ${nri.socialVulnerability}`);
+  if (nri.communityResilience) extras.push(`Community resilience: ${nri.communityResilience}`);
+  if (extras.length) {
+    containerEl.appendChild(createEl('div', 'nri-extras', extras.join(' · ')));
+  }
+
+  containerEl.appendChild(
+    createExternalLink('https://hazards.fema.gov/nri/', 'Source: FEMA National Risk Index', 'risk-source')
+  );
 }
 
 // ─── Tab Navigation Listeners ────────────────────────────────────────────────

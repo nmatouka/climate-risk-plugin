@@ -1,0 +1,8 @@
+name = "climateshed-cmip6-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# The upstream API key is NOT stored here. Set it as an encrypted secret:
+#   wrangler secret put CMIP6_API_KEY
+#
+# Optional: pin a custom route/domain under [[routes]] or via the dashboard.

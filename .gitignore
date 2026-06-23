@@ -21,6 +21,3 @@ test/
 # Chrome extension files
 *.pem
 *.crx
-
-# Note: flood-zone-data is kept in the repo but NOT loaded with the extension
-# It is hosted separately on GitHub Pages

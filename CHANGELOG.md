@@ -8,13 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Drought and air quality risk metrics (pending Cal-Adapt API availability)
-- Water scarcity/supply risk indicators
-- Landslide risk integration with USGS data
+- Drought, air quality, and environmental-justice cards (CalEnviroScreen, CalHeatScore, US Drought Monitor — already available from the CMIP6 microservice `/point/all`)
+- Heat-vulnerability card (Census LACE air-conditioning access)
+- SSP scenario toggle (SSP2-4.5 / SSP3-7.0 / SSP5-8.5)
+- Restore property-level elevation discrimination for sea level rise
 - Additional state coverage beyond California
 - Property comparison feature
-- Export risk reports as PDF
 - Firefox browser support
+
+---
+
+## [1.6.0] - 2026-06-22
+
+Migrated the mid-century projections from the legacy Cal-Adapt CMIP5 API
+(HadGEM2-ES, RCP 8.5) to **CMIP6 LOCA2** (5-model ensemble, SSP3-7.0, 2050–2059)
+served by the Climateshed CMIP6 microservice, and added a FEMA National Risk
+Index multi-hazard section.
+
+### Added
+- **FEMA National Risk Index section** — present-day multi-hazard risk (wildfire, inland flooding, earthquake, landslide, extreme heat, …) as national percentile ranks per census tract (FEMA NRI Dec 2025 v1.20)
+- **Ensemble ranges** — heat, heat days, and precipitation now show the p10–p90 spread across the 5-model ensemble alongside the median
+- **`climate-proxy/`** — a Cloudflare Worker that holds the microservice API key, sets CORS for the extension, caches points 24 h, and forwards to `/point/all`. The client extension ships no secret
+
+### Changed
+- **Extreme Heat / Extreme Heat Days** — now CMIP6 LOCA2 ensemble (SSP3-7.0). Heat-days methodology (local historical 95th-percentile threshold) is unchanged; values are the ensemble median
+- **Precipitation** — replaced "days above local 95th-percentile intensity" with **% change in average annual precipitation vs 1981–2010** (the microservice metric); card renamed **Precipitation Change**, classified by magnitude with directional copy and an uncertainty note when the ensemble spans drier and wetter
+- **Sea Level Rise** — now uses the nearest NOAA tide gauge (NOAA NOS TR 01 2022 / OPC 2024 planning standard) instead of the 7-bbox + USGS-elevation heuristic. Card is explicitly framed as regional, not a property-specific elevation assessment
+- **Mid-Century Projections** section header now discloses LOCA2 CMIP6 / SSP3-7.0
+
+### Removed
+- Direct Cal-Adapt queries for heat, heat days, and precipitation (now via the proxy/microservice)
+- USGS 3DEP elevation lookup (`epqs.nationalmap.gov`) and the `isNearCaliforniaCoast` bbox heuristic
+- Orphaned `popup/` (unused since the v1.3 side-panel refactor), dead `flood-zone-data/` GeoJSON (unused since v1.5.0 live FEMA), and redundant `gitignore.txt`
+
+### Fixed
+- Side-panel script tag referenced `dataFetcher.js`; corrected to `datafetcher.js` (would fail to load on case-sensitive filesystems)
+
+### Unchanged
+- Current wildfire (CAL FIRE FHSZ), current + projected flood (FEMA NFHL / FC-FIRM), and the wildfire 2050 probability (Cal-Adapt fireprob) are still queried directly from their public APIs
+
+### Technical
+- Cache schema bumped to `v3` (`climate_risk_v3_`); old entries are invalidated automatically
+- `host_permissions`: added `https://*.workers.dev/*`, removed `https://epqs.nationalmap.gov/*`
+- `fetchAllRisks` now orchestrates 4 settled calls (wildfire, wildfire projection, flood, Climateshed proxy); the proxy call degrades per-field rather than failing the batch
 
 ---
 
@@ -197,6 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Summary |
 |---------|------|---------|
+| **1.6.0** | 2026-06-22 | CMIP6 LOCA2 ensemble projections, FEMA NRI section, NOAA-gauge sea level rise, Cloudflare proxy |
 | **1.5.2** | 2026-04-08 | Fixed NOAA figure, local heat days threshold, recalibrated precip/SLR tiers |
 | **1.5.1** | 2026-04-01 | Fixed flood 0.2% zone, elevation-aware sea level rise, local precip threshold |
 | **1.5.0** | 2026-03-20 | 8 indicators, Current/Projected layout, live FEMA API, fixed heat days |
@@ -223,7 +260,8 @@ No security issues reported.
 
 ---
 
-[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.5.2...HEAD
+[Unreleased]: https://github.com/nmatouka/climate-risk-plugin/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.6.0
 [1.5.2]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.2
 [1.5.1]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.1
 [1.5.0]: https://github.com/nmatouka/climate-risk-plugin/releases/tag/v1.5.0

@@ -1,4 +1,4 @@
-# Climate Risk - California (v1.5.2)
+# Climate Risk - California (v1.6.0)
 
 A free, open-source Chrome extension that displays educational climate risk information for California real estate properties, helping homebuyers make informed decisions about climate hazards. This is a proof of concept and should not be relied upon to make purchasing decisions.
 
@@ -11,16 +11,20 @@ A free, open-source Chrome extension that displays educational climate risk info
 * **🔥 Wildfire** — Official CAL FIRE Fire Hazard Severity Zones, queried across both State (SRA) and Local (LRA) Responsibility Areas
 * **🌊 Flood** — FEMA National Flood Hazard Layer (NFHL), live point query including SFHA designation
 
-### Mid-Century Projections (2050–2060, RCP 8.5)
+### Mid-Century Projections (CMIP6 LOCA2, 5-model ensemble, SSP3-7.0, 2050–2059)
 
 * **🔥 Wildfire Probability** — Cal-Adapt / UC Merced decadal wildfire occurrence probability
 * **🌊 Projected Flood** — FEMA Future Conditions Flood Hazard data (FC-FIRM), extracted from the same NFHL response
-* **☀️ Extreme Heat** — Cal-Adapt projected average annual peak temperature
-* **🔆 Extreme Heat Days** — Cal-Adapt projected days above 95°F per year, counted directly from daily model output
-* **🌧️ Extreme Precipitation** — Cal-Adapt projected average annual total precipitation
-* **📈 Sea Level Rise** — Coastal proximity detection with NOAA 2022 sea level rise projections
+* **☀️ Extreme Heat** — CMIP6 LOCA2 projected average annual peak temperature (ensemble median + p10–p90 range)
+* **🔆 Extreme Heat Days** — CMIP6 LOCA2 projected days/year above the local historical 95th-percentile temperature
+* **🌧️ Precipitation Change** — CMIP6 LOCA2 projected % change in average annual precipitation vs. 1981–2010
+* **📈 Sea Level Rise** — Nearest NOAA tide gauge (NOAA NOS TR 01 2022 / OPC 2024 planning standard)
 
-The side panel groups risks into **Current Conditions** and **Mid-Century Projections** sections, each with an aggregate risk level badge, plus a headline **Now → 2050** summary showing whether projected risk is higher or lower than current conditions.
+### Regional Multi-Hazard Index
+
+* **📊 FEMA National Risk Index** — present-day risk percentiles per census tract across wildfire, inland flooding, earthquake, landslide, extreme heat, and more (FEMA NRI Dec 2025 v1.20)
+
+The side panel groups risks into **Current Conditions**, **Mid-Century Projections**, and **Regional Hazard Index (FEMA NRI)** sections, each with an aggregate risk level badge, plus a headline **Now → 2050** summary showing whether projected risk is higher or lower than current conditions.
 
 ### Supported Real Estate Websites
 
@@ -86,18 +90,21 @@ All climate risk information comes from authoritative public sources:
 | Flood | [FEMA NFHL](https://hazards.fema.gov/) Layer 28 | Current |
 | Wildfire Probability | [Cal-Adapt / UC Merced](https://cal-adapt.org/) | 2050s decade |
 | Projected Flood | [FEMA FC-FIRM](https://hazards.fema.gov/) (NFHL ZONE_SUBTY) | Future conditions |
-| Extreme Heat | [Cal-Adapt](https://cal-adapt.org/) | 2050–2060 |
-| Extreme Heat Days | [Cal-Adapt](https://cal-adapt.org/) | 2050–2060 |
-| Extreme Precipitation | [Cal-Adapt](https://cal-adapt.org/) | 2050–2060 |
-| Sea Level Rise | [NOAA](https://coast.noaa.gov/slr/) / [CA Coastal Commission](https://www.coastal.ca.gov/climate/slr/) | 2050 / 2100 |
+| Extreme Heat | CMIP6 LOCA2 ([Cal-Adapt](https://cal-adapt.org/)) via Climateshed microservice | 2050–2059 |
+| Extreme Heat Days | CMIP6 LOCA2 via Climateshed microservice | 2050–2059 |
+| Precipitation Change | CMIP6 LOCA2 via Climateshed microservice | 2050–2059 vs 1981–2010 |
+| Sea Level Rise | [NOAA NOS TR 01 2022](https://oceanservice.noaa.gov/hazards/sealevelrise/) (OPC 2024 standard) | 2050 / 2100 |
+| Multi-hazard Index | [FEMA National Risk Index](https://hazards.fema.gov/nri/) (Dec 2025 v1.20) | Present-day |
 
-### About Cal-Adapt Data
+### About the CMIP6 Projection Data
 
-The Cal-Adapt platform provides downscaled climate projections from global climate models. This extension uses:
+Mid-century projections come from the **Climateshed CMIP6 microservice** (reached through a small Cloudflare-Worker proxy — see [`climate-proxy/`](climate-proxy/)). This extension uses:
 
-- **HadGEM2-ES** climate model under RCP 8.5 emissions scenario
-- **Mid-century timeframe** (2050–2060) for consistency
-- **Peer-reviewed** methodology from California's Climate Change Assessments
+- **LOCA2-downscaled CMIP6** projections, a **5-model ensemble** (median reported with the p10–p90 spread)
+- **SSP3-7.0** high-emissions scenario, **mid-century** window (2050–2059)
+- The same precomputed statistics that power Climateshed Intelligence
+
+This replaces the previous direct Cal-Adapt CMIP5 (HadGEM2-ES, RCP 8.5) queries. The wildfire 2050 probability is still sourced directly from Cal-Adapt (UC Merced), which the microservice does not provide.
 
 ### About Flood Data
 
@@ -109,17 +116,17 @@ Flood data is queried live from FEMA's National Flood Hazard Layer (NFHL) REST A
 
 * **Browser Side Panel** — Climate risk data is displayed in Chrome's native side panel, completely separate from the real estate website
 * **URL-based address detection** — Property addresses are read from the browser URL bar, not from page content
-* **Client-side only** — No backend server required
-* **Smart caching** — Results stored for 30 days to minimize API calls
-* **Parallel API calls** — All 8 risk indicators fetched simultaneously (flood current + projected share one request)
+* **Hybrid data layer** — Current wildfire (CAL FIRE), flood (FEMA NFHL), and wildfire 2050 probability (Cal-Adapt) are queried directly; CMIP6 projections, sea level rise, and FEMA NRI come from the Climateshed microservice via a small Cloudflare-Worker proxy ([`climate-proxy/`](climate-proxy/)) that holds the API key and sets CORS
+* **Smart caching** — Results stored for 30 days client-side; the proxy also caches each point 24 h at the edge
+* **Parallel calls** — Wildfire, wildfire projection, flood, and the Climateshed batch run concurrently; CMIP6 + SLR + NRI share one proxy request
 * **Geocoding** — Addresses geocoded via OpenStreetMap Nominatim to obtain coordinates
-* **Current vs. projected layout** — Risks grouped into two sections with aggregate badges and a Now → 2050 headline summary
+* **Layout** — Risks grouped into Current Conditions, Mid-Century Projections, and a FEMA NRI section, with aggregate badges and a Now → 2050 headline summary
 
 ### Performance
 
-* **Initial load:** 10–30 seconds (Cal-Adapt daily heat days query is the slowest — ~3,650 data points)
-* **Subsequent loads:** < 2 seconds (all data cached)
-* **Cache duration:** 30 days
+* **Initial load:** ~3–8 seconds (the microservice serves precomputed CMIP6 statistics — no live daily-data download)
+* **Subsequent loads:** < 2 seconds (all data cached client-side)
+* **Cache duration:** 30 days (client) / 24 h (edge proxy)
 
 ### Risk Classification Details
 
@@ -136,21 +143,21 @@ Flood data is queried live from FEMA's National Flood Hazard Layer (NFHL) REST A
 - Other future designation: Low
 - Not mapped: Unavailable (FC-FIRM coverage is expanding)
 
-**Extreme Heat Days** (days above 95°F, counted directly from Cal-Adapt daily data)
-- < 10 days/year: Minimal
-- 10–29 days/year: Low
-- 30–59 days/year: Moderate
-- 60–89 days/year: High
-- ≥ 90 days/year: Severe
+**Extreme Heat Days** (days/year above the local historical 95th-percentile temperature, CMIP6 ensemble median)
+- < 18 days/year: Minimal (≈ the historical baseline)
+- 18–29 days/year: Low
+- 30–54 days/year: Moderate
+- 55–79 days/year: High
+- ≥ 80 days/year: Severe
 
-**Extreme Precipitation** (projected annual total)
-- < 10 in/year: Minimal
-- 10–19 in/year: Low
-- 20–34 in/year: Moderate
-- 35–49 in/year: High
-- ≥ 50 in/year: Severe
+**Precipitation Change** (% change in average annual precipitation vs. 1981–2010, classified by magnitude; copy describes direction — wetter → runoff/flood, drier → drought stress)
+- < 2% change: Minimal
+- 2–5%: Low
+- 5–10%: Moderate
+- 10–20%: High
+- ≥ 20%: Severe
 
-**Sea Level Rise** — Detects coastal properties (within ~10 miles of coast) using seven validated regional bounding boxes. Reports NOAA 2022 projections: 0.6–1.5 ft by 2050 (intermediate), up to 3.5 ft by 2100 (high scenario).
+**Sea Level Rise** — Uses the nearest NOAA tide gauge (within ~100 km of the California coast; ~150 km in the tidally-connected Delta). Reports NOAA NOS TR 01 2022 projections under the OPC 2024 planning standard. Severity reflects the regional intermediate-scenario rise by 2100; the card is explicitly regional, not a property-specific elevation assessment.
 
 ## Privacy
 
@@ -162,15 +169,26 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 
 ### Priority Improvements for Future Versions
 
-1. **Drought and air quality data** — Add when Cal-Adapt makes PDSI and smoke day projections available via API
-2. **More accurate heat days** — Query full daily data instead of statistical estimation
-3. **Landslide risk** — Integrate USGS data
-4. **Water stress indicators** — Add reservoir/groundwater projections
-5. **Additional state coverage** — Expand beyond California
+The CMIP6 microservice already returns several datasets the side panel does not yet display — these are the lowest-hanging fruit:
+
+1. **Drought, environmental justice & heat vulnerability** — Surface US Drought Monitor, CalEnviroScreen 4.0, CalHeatScore, and Census LACE air-conditioning access (already in the microservice `/point/all`)
+2. **SSP scenario toggle** — Let users switch between SSP2-4.5, SSP3-7.0, and SSP5-8.5
+3. **Property-level sea level rise** — Combine the NOAA-gauge projections with parcel elevation for site-specific inundation
+4. **Groundwater & water stress** — Add CASGEM depth/trend and basin data
+5. **Additional state coverage** — Expand CMIP6/NRI coverage beyond California
 
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
+
+### v1.6.0 (2026-06-22)
+- ✨ Migrated mid-century projections to **CMIP6 LOCA2** (5-model ensemble, SSP3-7.0, 2050–2059) via the Climateshed microservice — replaces direct Cal-Adapt CMIP5 (HadGEM2-ES, RCP 8.5)
+- ✨ Added **FEMA National Risk Index** multi-hazard section (wildfire, inland flooding, earthquake, landslide, extreme heat, …)
+- ✨ Heat / heat days / precipitation now show the **p10–p90 ensemble range**
+- 🌊 Sea level rise now uses the **nearest NOAA tide gauge** (OPC 2024 standard) instead of a bbox + USGS-elevation heuristic
+- 🌧️ Precipitation card is now **% change vs 1981–2010** (renamed Precipitation Change)
+- 🔌 Added `climate-proxy/` Cloudflare Worker so the client extension reaches the microservice without shipping the API key
+- 🧹 Removed orphaned `popup/`, dead `flood-zone-data/`, and redundant `gitignore.txt`; fixed a `datafetcher.js` script-casing bug
 
 ### v1.5.0 (2026-03-20)
 - ✨ Added Wildfire Probability (Cal-Adapt / UC Merced 2050s decadal probability)

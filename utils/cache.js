@@ -1,6 +1,7 @@
 const ClimateCache = {
-  CACHE_PREFIX: 'climate_risk_v2_',
+  CACHE_PREFIX: 'climate_risk_v3_',
   CACHE_DURATION: 30 * 24 * 60 * 60 * 1000, // 30 days
+  CACHE_VERSION: 3,
   DEBUG: false,
 
   debug(...args) {
@@ -26,7 +27,7 @@ const ClimateCache = {
           return null;
         }
 
-        if (cached.version && cached.version !== 2) {
+        if (cached.version && cached.version !== this.CACHE_VERSION) {
           await this.remove(address);
           return null;
         }
@@ -61,7 +62,7 @@ const ClimateCache = {
         [key]: {
           data: data,
           timestamp: Date.now(),
-          version: 2
+          version: this.CACHE_VERSION
         }
       });
       return true;
@@ -134,7 +135,7 @@ const ClimateCache = {
         expiredEntries: expiredCount,
         estimatedSizeBytes: totalSize,
         estimatedSizeKB: (totalSize / 1024).toFixed(2),
-        version: 2
+        version: this.CACHE_VERSION
       };
     } catch (error) {
       return {
@@ -142,7 +143,7 @@ const ClimateCache = {
         expiredEntries: 0,
         estimatedSizeBytes: 0,
         estimatedSizeKB: '0',
-        version: 2
+        version: this.CACHE_VERSION
       };
     }
   },
@@ -159,7 +160,7 @@ const ClimateCache = {
             keysToRemove.push(key);
           } else if (!value.data || !value.timestamp) {
             keysToRemove.push(key);
-          } else if (value.version !== 2) {
+          } else if (value.version !== this.CACHE_VERSION) {
             keysToRemove.push(key);
           }
         }
