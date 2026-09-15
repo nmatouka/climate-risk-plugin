@@ -6,3 +6,13 @@ compatibility_date = "2025-01-01"
 #   wrangler secret put CMIP6_API_KEY
 #
 # Optional: pin a custom route/domain under [[routes]] or via the dashboard.
+
+# Per-client-IP request limit used by worker.js. Needs Wrangler 4.36.0 or later.
+# namespace_id is any positive integer not used by another rate limiter on the account.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60

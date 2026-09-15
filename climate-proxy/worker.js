@@ -1,12 +1,14 @@
 // ============================================================================
-// Climateshed CMIP6 — public CORS proxy (Cloudflare Worker)
+// Climateshed CMIP6 — proxy for the Climate Risk extension (Cloudflare Worker)
 // ============================================================================
 // The CMIP6 microservice (ca-climate-cmip6.fly.dev) requires an X-API-Key and
 // defaults to deny-all CORS, so a client-side browser extension cannot call it
 // directly without shipping a secret. This Worker:
 //   • holds the API key server-side (Worker secret CMIP6_API_KEY)
 //   • forwards GET /climate?lat=&lon=  →  upstream /point/all?scenario=ssp370
-//   • returns permissive CORS for chrome-extension:// (and localhost dev)
+//   • returns only the fields the extension reads (climate, slr, nri)
+//   • allows CORS only for chrome-extension:// (and localhost dev)
+//   • limits requests per client IP (RATE_LIMITER binding in wrangler.toml)
 //   • caches each point ~24h at the edge to shield the small upstream VM
 //
 // Deploy: see README.md. The extension calls ONLY this Worker — never the
@@ -16,17 +18,35 @@
 const UPSTREAM = 'https://ca-climate-cmip6.fly.dev';
 const SCENARIO = 'ssp370'; // LOCA2 CMIP6 high-emissions scenario (Climateshed default)
 const CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h
-const ALLOWED_ORIGIN_PREFIXES = ['chrome-extension://', 'http://localhost', 'http://127.0.0.1'];
+// Part of the edge cache key. Bump it whenever the response shape changes, so
+// copies cached in the old shape are never served.
+const CACHE_VERSION = '2';
+// The /point/all fields utils/datafetcher.js reads. Nothing else leaves the Worker.
+const RESPONSE_FIELDS = ['climate', 'slr', 'nri'];
+
+// Browsers may read responses only from the extension and local development.
+// An extension page with host permission for this Worker isn't subject to CORS,
+// so this keeps other websites out without depending on the extension's Origin.
+function isAllowedOrigin(origin) {
+  if (origin.startsWith('chrome-extension://')) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === 'http:' && (hostname === 'localhost' || hostname === '127.0.0.1');
+  } catch (_) {
+    return false;
+  }
+}
 
 function corsHeaders(origin) {
-  // Public, credential-less data: reflect a recognized origin, else allow all.
-  const allow = origin && ALLOWED_ORIGIN_PREFIXES.some(p => origin.startsWith(p)) ? origin : '*';
-  return {
-    'Access-Control-Allow-Origin': allow,
+  const headers = {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin',
   };
+  if (origin && isAllowedOrigin(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return headers;
 }
 
 function json(obj, status, extraHeaders) {
@@ -34,6 +54,14 @@ function json(obj, status, extraHeaders) {
     status,
     headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) },
   });
+}
+
+// Keep only RESPONSE_FIELDS from an upstream /point/all body. Throws on invalid JSON.
+function pickFields(upstreamBody) {
+  const all = JSON.parse(upstreamBody);
+  const picked = {};
+  for (const field of RESPONSE_FIELDS) picked[field] = all[field] ?? null;
+  return JSON.stringify(picked);
 }
 
 export default {
@@ -53,6 +81,17 @@ export default {
       return json({ error: 'Not found' }, 404, cors);
     }
 
+    // Looking at listings takes a few requests a minute; copying the dataset takes
+    // thousands. Callers are anonymous, so the limit is per client IP. Cloudflare
+    // applies it per location and approximately, which is enough to stop bulk copying.
+    if (env.RATE_LIMITER) {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const { success } = await env.RATE_LIMITER.limit({ key: ip });
+      if (!success) {
+        return json({ error: 'Too many requests' }, 429, { ...cors, 'Retry-After': '60' });
+      }
+    }
+
     const lat = parseFloat(url.searchParams.get('lat'));
     const lon = parseFloat(url.searchParams.get('lon'));
     if (!Number.isFinite(lat) || !Number.isFinite(lon) ||
@@ -70,7 +109,8 @@ export default {
 
     // Edge cache keyed on the snapped point. Stored without an origin-specific
     // CORS header so a HIT can be re-served to any allowed origin.
-    const cacheKey = new Request(`${url.origin}/climate?lat=${sLat}&lon=${sLon}&scenario=${SCENARIO}`);
+    const cacheKey = new Request(
+      `${url.origin}/climate?lat=${sLat}&lon=${sLon}&scenario=${SCENARIO}&v=${CACHE_VERSION}`);
     const cache = caches.default;
 
     const hit = await cache.match(cacheKey);
@@ -91,10 +131,17 @@ export default {
       return json({ error: 'Upstream unreachable' }, 502, cors);
     }
 
-    const body = await upstreamResp.text();
+    const upstreamBody = await upstreamResp.text();
     if (!upstreamResp.ok) {
       // Pass through the status code but never the upstream body/headers (key safety).
       return json({ error: 'Upstream error', status: upstreamResp.status }, upstreamResp.status, cors);
+    }
+
+    let body;
+    try {
+      body = pickFields(upstreamBody);
+    } catch (_) {
+      return json({ error: 'Upstream returned invalid JSON' }, 502, cors);
     }
 
     // Cache a generic (CORS-free) copy; serve a CORS-tagged copy to the caller.
