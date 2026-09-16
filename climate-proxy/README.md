@@ -10,7 +10,7 @@ upstream API key.
 Extension  ──GET /climate?lat=&lon=──►  Worker  ──/point/all (X-API-Key)──►  microservice
                                           │
                                           ├─ injects the API key (server-side secret)
-                                          ├─ returns only climate, slr, and nri
+                                          ├─ asks for and returns only climate, slr, nri
                                           ├─ allows CORS for chrome-extension:// + localhost only
                                           ├─ limits each client IP to 30 requests a minute
                                           └─ caches each ~1 km point for 24 h at the edge
@@ -62,7 +62,8 @@ If the extension starts reading another `/point/all` field, add it to
 ## Abuse protection
 
 - **Only the needed fields leave the Worker**, so the rest of the dataset can't be
-  copied through it.
+  copied through it. The upstream request carries the same `fields=` list, so the
+  service doesn't compute datasets this proxy would discard.
 - **Rate limiting**: the `RATE_LIMITER` binding in `wrangler.toml` allows 30
   requests a minute per client IP. Cloudflare counts per location and
   approximately, so treat it as a brake on bulk copying rather than an exact quota.

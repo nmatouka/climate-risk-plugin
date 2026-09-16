@@ -6,7 +6,8 @@
 // directly without shipping a secret. This Worker:
 //   • holds the API key server-side (Worker secret CMIP6_API_KEY)
 //   • forwards GET /climate?lat=&lon=  →  upstream /point/all?scenario=ssp370
-//   • returns only the fields the extension reads (climate, slr, nri)
+//   • asks upstream for, and returns, only the fields the extension reads
+//     (climate, slr, nri) — the service skips the rest
 //   • allows CORS only for chrome-extension:// (and localhost dev)
 //   • limits requests per client IP (RATE_LIMITER binding in wrangler.toml)
 //   • caches each point ~24h at the edge to shield the small upstream VM
@@ -21,7 +22,9 @@ const CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h
 // Part of the edge cache key. Bump it whenever the response shape changes, so
 // copies cached in the old shape are never served.
 const CACHE_VERSION = '2';
-// The /point/all fields utils/datafetcher.js reads. Nothing else leaves the Worker.
+// The /point/all fields utils/datafetcher.js reads. These are both what the Worker
+// asks upstream for and what it serves, so the service skips the other datasets
+// instead of computing them for a response that would drop them.
 const RESPONSE_FIELDS = ['climate', 'slr', 'nri'];
 
 // Browsers may read responses only from the extension and local development.
@@ -121,7 +124,9 @@ export default {
       return r;
     }
 
-    const upstreamUrl = `${UPSTREAM}/point/all?lat=${sLat}&lon=${sLon}&scenario=${SCENARIO}`;
+    const upstreamUrl =
+      `${UPSTREAM}/point/all?lat=${sLat}&lon=${sLon}&scenario=${SCENARIO}` +
+      `&fields=${RESPONSE_FIELDS.join(',')}`;
     let upstreamResp;
     try {
       upstreamResp = await fetch(upstreamUrl, {
